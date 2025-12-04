@@ -4,6 +4,7 @@ from gmail_service.views import (
     GmailCallbackView,
     SendEmailView,
     ReadThreadView,
+    SyncSingleThreadView,
 )
 
 urlpatterns = [
@@ -11,4 +12,5 @@ urlpatterns = [
     path("callback/", GmailCallbackView.as_view(), name="gmail-callback"),
     path("send/", SendEmailView.as_view(), name="gmail-send"),
     path("thread/", ReadThreadView.as_view(), name="gmail-thread"),
+    path("sync-thread/", SyncSingleThreadView.as_view(), name="gmail-sync-thread"),
 ]

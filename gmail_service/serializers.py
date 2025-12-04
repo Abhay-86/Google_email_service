@@ -47,3 +47,9 @@ class ReadThreadQuerySerializer(serializers.Serializer):
     """Query parameters for thread reading"""
     email = serializers.EmailField()
     thread_id = serializers.CharField()
+
+
+class SyncSingleThreadSerializer(serializers.Serializer):
+    """Payload for syncing a single thread"""
+    email = serializers.EmailField()
+    thread_id = serializers.CharField()
