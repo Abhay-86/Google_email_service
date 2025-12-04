@@ -1,5 +1,6 @@
 # gmail_service/services/gmail_service.py
 
+from email.utils import parsedate_to_datetime
 import requests
 from urllib.parse import urlencode
 from django.conf import settings
@@ -25,6 +26,7 @@ class GmailService:
 
     SCOPES = [
         "https://www.googleapis.com/auth/gmail.send",
+        "https://www.googleapis.com/auth/gmail.modify",
         "https://www.googleapis.com/auth/gmail.readonly",
     ]
 
@@ -182,3 +184,49 @@ class GmailService:
             "message_id": sent_msg["id"],
             "thread_id": sent_msg["threadId"],
         }
+
+    @classmethod
+    def read_thread(cls, gmail_account, thread_id):
+        creds = cls.get_credentials(gmail_account)
+        service = build("gmail", "v1", credentials=creds)
+
+        thread = service.users().threads().get(
+            userId="me",
+            id=thread_id,
+            format="full"
+        ).execute()
+
+        messages = []
+
+        for msg in thread.get("messages", []):
+            payload = msg.get("payload", {})
+            headers = {h["name"]: h["value"] for h in payload.get("headers", [])}
+            
+            from_email = headers.get("From", "")
+            direction = "OUTBOUND" if gmail_account.email in from_email else "INBOUND"
+
+            date_header = headers.get("Date")
+
+            if date_header:
+                try:
+                    timestamp = parsedate_to_datetime(date_header)
+                    if timestamp.tzinfo is None:
+                        timestamp = timezone.make_aware(timestamp)
+                except Exception:
+                    timestamp = timezone.datetime.fromtimestamp(
+                        int(msg["internalDate"]) / 1000, tz=timezone.utc
+                    )
+            else:
+                timestamp = timezone.datetime.fromtimestamp(
+                    int(msg["internalDate"]) / 1000, tz=timezone.utc
+                )
+
+            messages.append({
+                "message_id": msg["id"],
+                "from": from_email,
+                "snippet": msg.get("snippet"),
+                "timestamp": timestamp.isoformat(),
+                "direction": direction,
+            })
+
+        return messages

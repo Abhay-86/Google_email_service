@@ -1,7 +1,11 @@
 from django.shortcuts import render
 from django.conf import settings
+from django.utils import timezone 
+from django.utils.dateparse import parse_datetime
+from email.utils import parsedate_to_datetime
 from gmail_service.models import GmailAccount
-from gmail_service.services.gmail import GmailService
+from gmail_service.services.gmail import GmailService 
+from gmail_service.models import EmailThread, EmailMessage
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -10,7 +14,8 @@ from gmail_service.serializers import (
     GmailConnectSerializer,
     GmailCallbackSerializer,
     SendEmailSerializer,
-    ReadThreadQuerySerializer
+    ReadThreadQuerySerializer,
+    SyncSingleThreadSerializer,
 )
 
 class GmailConnectView(APIView):
@@ -109,20 +114,14 @@ class SendEmailView(APIView):
         serializer.is_valid(raise_exception=True)
 
         data = serializer.validated_data
-
-        # attachments (from form-data)
         attachments = request.FILES.getlist("attachments")
 
-        # Look up the Gmail account using the DB model
         try:
             acc = GmailAccount.objects.get(email=data["from_email"])
         except GmailAccount.DoesNotExist:
-            return Response(
-                {"error": "This email is not connected via OAuth"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "This email is not connected via OAuth"}, status=400)
 
-        # Send the email
+        # send email
         result = GmailService.send_email(
             acc,
             data["to_email"],
@@ -131,7 +130,25 @@ class SendEmailView(APIView):
             attachments=attachments
         )
 
-        return Response(result, status=status.HTTP_200_OK)
+        thread_id = result["thread_id"]
+        message_id = result["message_id"]
+
+        thread, _ = EmailThread.objects.get_or_create(
+            gmail_account=acc,
+            recipient_email=data["to_email"],
+            thread_id=thread_id
+        )
+
+        EmailMessage.objects.create(
+            thread=thread,
+            message_id=message_id,
+            direction="OUTBOUND",
+            timestamp=timezone.now(),   
+            template_id=None,
+        )
+
+
+        return Response(result, status=200)
 
 class ReadThreadView(APIView):
 
@@ -146,6 +163,114 @@ class ReadThreadView(APIView):
 
         data = serializer.validated_data
         acc = GmailAccount.objects.get(email=data["email"])
+        thread_id = data["thread_id"]
 
-        msgs = GmailService.read_thread(acc, data["thread_id"])
-        return Response({"messages": msgs}, status=status.HTTP_200_OK)
+        msgs = GmailService.read_thread(acc, thread_id)
+
+        # store new messages
+        thread, created = EmailThread.objects.get_or_create(
+            gmail_account=acc,
+            thread_id=thread_id,
+            defaults={'recipient_email': None}
+        )
+        for m in msgs:
+            # Parse timestamp - it's already an ISO string from the service
+            try:
+                if isinstance(m["timestamp"], str):
+                    # If it's already an ISO string, parse it directly
+                    timestamp_obj = parse_datetime(m["timestamp"])
+                    if timestamp_obj is None:
+                        # Fallback to parsedate_to_datetime
+                        timestamp_obj = parsedate_to_datetime(m["timestamp"])
+                else:
+                    timestamp_obj = m["timestamp"]
+                
+                if timestamp_obj.tzinfo is None:
+                    timestamp_obj = timezone.make_aware(timestamp_obj)
+            except Exception as e:
+                # If all else fails, use current time
+                timestamp_obj = timezone.now()
+
+            if not EmailMessage.objects.filter(message_id=m["message_id"]).exists():
+                EmailMessage.objects.create(
+                    thread=thread,
+                    message_id=m["message_id"],
+                    direction=m["direction"],
+                    timestamp=timestamp_obj,
+                    template_id=None
+                )
+
+        return Response({"messages": msgs}, status=200)
+
+class SyncSingleThreadView(APIView):
+
+    @extend_schema(
+        description="Sync inbound/outbound messages for a single Gmail thread.",
+        request=SyncSingleThreadSerializer,
+        responses={200: dict},
+    )
+    def post(self, request):
+        serializer = SyncSingleThreadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data["email"]
+        thread_id = serializer.validated_data["thread_id"]
+
+        # Find connected Gmail account
+        try:
+            acc = GmailAccount.objects.get(email=email)
+        except GmailAccount.DoesNotExist:
+            return Response({"error": "This Gmail account is not connected"}, status=400)
+
+        # Find the thread belonging to this account
+        try:
+            thread = EmailThread.objects.get(gmail_account=acc, thread_id=thread_id)
+        except EmailThread.DoesNotExist:
+            return Response({"error": "Thread not found for this account"}, status=404)
+
+        # Read the thread from Gmail
+        msgs = GmailService.read_thread(acc, thread_id)
+
+        new_msg_count = 0
+
+        for m in msgs:
+            msg_id = m["message_id"]
+
+            if EmailMessage.objects.filter(message_id=msg_id).exists():
+                continue
+
+            # Parse timestamp - it's already an ISO string from the service
+            try:
+                if isinstance(m["timestamp"], str):
+                    # If it's already an ISO string, parse it directly
+                    timestamp_obj = parse_datetime(m["timestamp"])
+                    if timestamp_obj is None:
+                        # Fallback to parsedate_to_datetime
+                        timestamp_obj = parsedate_to_datetime(m["timestamp"])
+                else:
+                    timestamp_obj = m["timestamp"]
+                
+                if timestamp_obj.tzinfo is None:
+                    timestamp_obj = timezone.make_aware(timestamp_obj)
+            except Exception as e:
+                # If all else fails, use current time
+                timestamp_obj = timezone.now()
+
+            EmailMessage.objects.create(
+                thread=thread,
+                message_id=msg_id,
+                direction=m["direction"],
+                timestamp=timestamp_obj,
+                template_id=None,
+            )
+
+            new_msg_count += 1
+
+        return Response(
+            {
+                "thread_id": thread_id,
+                "new_messages_added": new_msg_count,
+                "status": "sync completed",
+            },
+            status=200,
+        )
