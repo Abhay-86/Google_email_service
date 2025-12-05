@@ -45,8 +45,8 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'drf_spectacular_sidecar',
 
-    # local
     'gmail_service',
+    'vendors',
 ]
 
 MIDDLEWARE = [
