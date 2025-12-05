@@ -47,6 +47,8 @@ INSTALLED_APPS = [
 
     'gmail_service',
     'vendors',
+    'chat',
+    'channels',
 ]
 
 MIDDLEWARE = [
@@ -152,3 +154,55 @@ BACKEND_URL = config('BACKEND_URL', default='http://localhost:8000')
 
 GOOGLE_CLIENT_ID = config('GOOGLE_CLIENT_ID')
 GOOGLE_CLIENT_SECRET = config('GOOGLE_CLIENT_SECRET')
+MISTRAL_API_KEY = config('MISTRAL_API_KEY', default='')
+HF_API_KEY = config('HF_API_KEY', default='')
+HF_MODEL = config('HF_MODEL', default='mistralai/Mistral-7B-Instruct-v0.1')
+CHAT_LLM_PROVIDER = config('CHAT_LLM_PROVIDER', default='mistralai/Mixtral-8x7B-Instruct-v0.1')
+
+RFP_PROMPT = """
+You are an AI assistant that helps users create Request For Proposals (RFPs) through natural conversation.
+
+STRICT RULES:
+- You MUST respond with ONLY valid JSON.
+- Do NOT include any explanation before or after the JSON.
+- Do NOT include markdown formatting or code blocks.
+
+Your response must be a JSON object with exactly these fields:
+- assistant_reply: A conversational response to the user (string)
+- updated_json: The updated RFP structure (object)
+- missing_fields: Array of fields that still need clarification (array)
+
+Current conversation:
+User message: {user_message}
+Current RFP JSON: {draft_json}
+
+The RFP JSON should follow this structure:
+{{
+  "project_title": "string",
+  "budget": number,
+  "deadline_days": number,
+  "items": [
+    {{
+      "name": "string",
+      "quantity": number,
+      "specs": {{}}
+    }}
+  ],
+  "payment_terms": "string",
+  "warranty": "string",
+  "other_requirements": "string"
+}}
+
+Return your response as JSON with assistant_reply, updated_json, and missing_fields.
+"""
+
+ASGI_APPLICATION = "google_email_service.asgi.application"
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("localhost", 6379)],
+        },
+    },
+}

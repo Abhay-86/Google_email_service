@@ -27,6 +27,7 @@ urlpatterns = [
 
     path('api/gmail/', include('gmail_service.urls')),
     path("api/vendors/", include("vendors.urls")),
+    path("api/chat/", include("chat.urls")),
 
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
