@@ -94,6 +94,8 @@ class ChatView(APIView):
             return self.get_history(request)
         elif action == "submit":
             return self.submit(request)
+        elif action == "list":
+            return self.list_sessions(request)
 
         return Response({"error": "Invalid action"}, status=400)
 
@@ -175,4 +177,32 @@ class ChatView(APIView):
         return Response({
             "status": "submitted",
             "message": "Chat session submitted and closed."
+        })
+
+    def list_sessions(self, request):
+        """Get all chat sessions for a user"""
+        # Extract email from request data
+        email = request.data.get("email")
+        if not email:
+            return Response({"error": "Email is required"}, status=400)
+
+        try:
+            gmail_account = GmailAccount.objects.get(email=email)
+        except GmailAccount.DoesNotExist:
+            return Response({"error": "Gmail account not found"}, status=404)
+
+        # Get all sessions for this user, ordered by newest first
+        sessions = ChatSession.objects.filter(gmail_account=gmail_account).order_by('-created_at')
+
+        session_list = [{
+            "id": session.id,
+            "title": session.title,
+            "is_closed": session.is_closed,
+            "is_submitted": session.is_submitted,
+            "created_at": session.created_at.isoformat()
+        } for session in sessions]
+
+        return Response({
+            "sessions": session_list,
+            "total": len(session_list)
         })

@@ -4,13 +4,19 @@ import { useRef, useEffect } from "react"
 import { ChatMessageBubble } from "@/components/chat/chat-message"
 import { ChatInput } from "@/components/chat/chat-input"
 import { EmptyState } from "@/components/chat/empty-state"
+import { Button } from "@/components/ui/button"
+import { Send } from "lucide-react"
+import type { ChatMessage } from "@/types/types"
 
 interface ChatMainProps {
-  messages: any[]
+  messages: ChatMessage[]
   onSendMessage: (message: string) => void
   isLoading: boolean
   isConnected: boolean
   onStartChat: () => void
+  currentSessionId: number | null
+  isSubmitted: boolean
+  onSubmitChat: () => void
 }
 
 export function ChatMain({
@@ -19,6 +25,9 @@ export function ChatMain({
   isLoading,
   isConnected,
   onStartChat,
+  currentSessionId,
+  isSubmitted,
+  onSubmitChat,
 }: ChatMainProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -37,6 +46,18 @@ export function ChatMain({
           {/* Header */}
           <div className="border-b border-border px-4 py-3 flex items-center justify-between">
             <h2 className="font-medium text-foreground">Gmail AI Chat</h2>
+            {currentSessionId && !isSubmitted && (
+              <Button 
+                onClick={onSubmitChat}
+                variant="default"
+                size="sm"
+                disabled={isLoading}
+                className="gap-2"
+              >
+                <Send className="h-4 w-4" />
+                Submit Chat
+              </Button>
+            )}
           </div>
 
           {/* Messages Area */}
@@ -48,8 +69,11 @@ export function ChatMain({
                     Start a conversation with your Gmail AI assistant!
                   </div>
                 ) : (
-                  messages.map((message) => (
-                    <ChatMessageBubble key={message.id} message={message} />
+                  messages.map((message, index) => (
+                    <ChatMessageBubble 
+                      key={message.id || `message-${index}`} 
+                      message={message} 
+                    />
                   ))
                 )}
                 {isLoading && (
@@ -73,7 +97,16 @@ export function ChatMain({
           {/* Input */}
           <div className="border-t border-border p-4">
             <div className="max-w-3xl mx-auto">
-              <ChatInput onSend={onSendMessage} isLoading={isLoading} />
+              {isSubmitted ? (
+                <div className="text-center py-4">
+                  <p className="text-muted-foreground mb-2">This chat has been submitted and closed.</p>
+                  <Button onClick={onStartChat} variant="outline">
+                    Start New Chat
+                  </Button>
+                </div>
+              ) : (
+                <ChatInput onSend={onSendMessage} isLoading={isLoading} />
+              )}
             </div>
           </div>
         </>

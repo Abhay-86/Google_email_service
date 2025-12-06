@@ -52,3 +52,12 @@ export async function submitChat(payload: SubmitChatRequest): Promise<SubmitChat
   });
   return response.data;
 }
+
+// Get all chat sessions for a user
+export async function getAllSessions(email: string): Promise<any[]> {
+  const response = await axiosInstance.post("chat/", {
+    action: "list",
+    email: email
+  });
+  return response.data.sessions || [];
+}

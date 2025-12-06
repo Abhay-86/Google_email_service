@@ -6,8 +6,8 @@ class ChatRequestSerializer(serializers.Serializer):
     Main serializer for all chat actions. The action field determines which operation to perform.
     """
     action = serializers.ChoiceField(
-        choices=['start', 'message', 'history', 'submit'],
-        help_text="The action to perform: 'start' to begin a new chat, 'message' to send a message, 'history' to get chat history, 'submit' to finalize the chat"
+        choices=['start', 'message', 'history', 'submit', 'list'],
+        help_text="The action to perform: 'start' to begin a new chat, 'message' to send a message, 'history' to get chat history, 'submit' to finalize the chat, 'list' to get all sessions"
     )
     email = serializers.EmailField(
         required=False,
@@ -25,9 +25,9 @@ class ChatRequestSerializer(serializers.Serializer):
     def validate(self, attrs):
         action = attrs.get('action')
         
-        if action == 'start':
+        if action == 'start' or action == 'list':
             if not attrs.get('email'):
-                raise serializers.ValidationError("'email' field is required for start action")
+                raise serializers.ValidationError("'email' field is required for start and list actions")
         
         elif action in ['message', 'history', 'submit']:
             if not attrs.get('session_id'):
