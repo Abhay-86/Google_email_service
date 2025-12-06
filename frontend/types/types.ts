@@ -152,6 +152,11 @@ export interface SubmitChatRequest {
 export interface SubmitChatResponse {
   status: string;
   message: string;
+  session_id?: number;
+  email_preview?: {
+    subject: string;
+    body: string;
+  };
 }
 
 // WebSocket Types

@@ -8,7 +8,7 @@ import { SubmitChatModal } from "@/components/chat/submit-chat-modal"
 import { Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { connectGmail } from "@/service/gmail/gmailService"
-import { startChat, sendMessage, getChatHistory, submitChat, getAllSessions } from "@/service/chat/chatService"
+import { startChat, sendMessage, getChatHistory, submitChat, confirmSubmit, getAllSessions } from "@/service/chat/chatService"
 import type { GmailConnectRequest, ChatMessage } from "@/types/types"
 
 export function ChatLayout() {
@@ -23,6 +23,8 @@ export function ChatLayout() {
   const [chatSessions, setChatSessions] = useState<Array<{ id: number; title: string; created_at?: string; is_submitted?: boolean }>>([])
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [showSubmitModal, setShowSubmitModal] = useState(false)
+  const [emailPreview, setEmailPreview] = useState<{ subject: string; body: string } | null>(null)
+  const [submitStep, setSubmitStep] = useState<'confirm' | 'preview'>('confirm')
 
   // Check for stored credentials on component mount
   useEffect(() => {
@@ -229,10 +231,50 @@ export function ChatLayout() {
       setIsLoading(true)
       console.log("Submitting chat session:", currentSessionId)
       
-      await submitChat({ session_id: currentSessionId })
+      const result = await submitChat({ session_id: currentSessionId })
+      
+      if (result.status === "preview" && result.email_preview) {
+        // Show email preview step
+        setEmailPreview(result.email_preview)
+        setSubmitStep('preview')
+      } else {
+        console.error("Unexpected response format:", result)
+      }
+    } catch (error) {
+      console.error("Failed to submit chat:", error)
+      setShowSubmitModal(false)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleFinalSubmit = async (subject: string, body: string) => {
+    if (!currentSessionId) return
+
+    try {
+      setIsLoading(true)
+      console.log("Finalizing email template submission")
+      
+      const result = await confirmSubmit({
+        session_id: currentSessionId,
+        subject: subject,
+        body: body
+      })
       
       setIsSubmitted(true)
       setShowSubmitModal(false)
+      setEmailPreview(null)
+      setSubmitStep('confirm')
+      
+      // Check if we should redirect to vendor selection
+      if (result.redirect_to === "vendor_selection" && result.template_id) {
+        // Show success message and redirect
+        setTimeout(() => {
+          alert(`Template saved successfully! Redirecting to vendor selection page.`)
+          // Redirect to vendor page
+          window.location.href = '/vendors'
+        }, 1000)
+      }
       
       // Reload sessions to get updated status
       if (userEmail) {
@@ -246,13 +288,18 @@ export function ChatLayout() {
         setIsSubmitted(false)
       }, 1500) // Give user time to see the "submitted" message
       
-      console.log("Chat session submitted and hidden from sidebar")
+      console.log("Email template saved and redirecting to vendor selection")
     } catch (error) {
-      console.error("Failed to submit chat:", error)
-      setShowSubmitModal(false)
+      console.error("Failed to finalize submission:", error)
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleCloseSubmitModal = () => {
+    setShowSubmitModal(false)
+    setEmailPreview(null)
+    setSubmitStep('confirm')
   }
 
   const handleSubmitRequest = () => {
@@ -315,9 +362,12 @@ export function ChatLayout() {
       {/* Submit Chat Modal */}
       <SubmitChatModal
         isOpen={showSubmitModal}
-        onClose={() => setShowSubmitModal(false)}
+        onClose={handleCloseSubmitModal}
         onConfirm={handleSubmitChat}
+        onFinalSubmit={handleFinalSubmit}
         isLoading={isLoading}
+        emailPreview={emailPreview}
+        step={submitStep}
       />
     </div>
   )
