@@ -1,0 +1,23 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: postgres_gmail_service
+    restart: always
+    environment:
+      POSTGRES_USER: abhay
+      POSTGRES_PASSWORD: abhay123
+      POSTGRES_DB: db
+    ports:
+      - "5432:5432"
+    # Option 1: Mount your own folder for persistence
+    volumes:
+      - ~/Documents/Projects/Google_email_service/storage/postgres:/var/lib/postgresql/data
+
+    # Option 2: Let Docker manage the storage volume
+    # volumes:
+    #   - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
