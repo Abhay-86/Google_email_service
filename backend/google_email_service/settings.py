@@ -216,6 +216,44 @@ Result: {{"items": [{{"name": "laptops", "quantity": 10}}, {{"name": "monitors",
 Return your response as JSON with assistant_reply, updated_json, and missing_fields.
 """
 
+# Email Template Generation Prompt
+EMAIL_GENERATION_PROMPT = """
+You are an expert email writer specializing in Request for Proposal (RFP) emails. Generate a professional email template based on the provided RFP JSON data.
+
+TASK: Create a professional RFP email with subject and body that clearly communicates the project requirements.
+
+RFP JSON DATA:
+{rfp_json}
+
+INSTRUCTIONS:
+1. Create a clear, compelling subject line (max 100 characters)
+2. Write a professional email body that:
+   - Introduces the project clearly
+   - Outlines key requirements from the JSON
+   - Maintains professional tone
+   - Includes a clear call to action
+   - Is well-structured and easy to read
+
+3. Use placeholders for dynamic content:
+   - {{vendor_name}} for recipient name
+   - {{company_name}} for sender's company
+   - {{contact_person}} for sender's name
+
+RESPONSE FORMAT:
+Return your response as JSON:
+{{
+  "subject": "Professional subject line here",
+  "template_body": "Full email template with proper formatting and placeholders"
+}}
+
+EXAMPLE SUBJECT LINES:
+- "RFP: Office Setup Project - $50,000 Budget"
+- "Request for Proposal: IT Infrastructure Upgrade"
+- "Proposal Request: Marketing Campaign Services"
+
+Keep the email concise but comprehensive, highlighting the most important requirements from the JSON data.
+"""
+
 ASGI_APPLICATION = "google_email_service.asgi.application"
 
 CHANNEL_LAYERS = {
