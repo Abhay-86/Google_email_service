@@ -17,9 +17,9 @@ export async function connectGmail(payload: GmailConnectRequest): Promise<GmailC
   return response.data;
 }
 
-// Handle Gmail OAuth callback
+// Handle Gmail OAuth callback  
 export async function handleGmailCallback(code: string, state: string): Promise<GmailCallbackResponse> {
-  const response = await axiosInstance.get(`gmail/callback/?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`);
+  const response = await axiosInstance.post("gmail/exchange-token/", { code, state });
   return response.data;
 }
 

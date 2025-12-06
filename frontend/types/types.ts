@@ -13,6 +13,7 @@ export interface GmailConnectResponse {
 export interface GmailCallbackResponse {
   success: boolean;
   email: string;
+  access_token?: string;
 }
 
 export interface SendEmailRequest {
