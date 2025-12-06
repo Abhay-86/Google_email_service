@@ -12,6 +12,12 @@ class GmailCallbackSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
 
+class GmailTokenExchangeSerializer(serializers.Serializer):
+    """Frontend token exchange request"""
+    code = serializers.CharField()
+    state = serializers.CharField()
+
+
 class SendEmailSerializer(serializers.Serializer):
     """Payload for sending an email"""
     from_email = serializers.EmailField()

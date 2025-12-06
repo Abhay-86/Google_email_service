@@ -13,6 +13,7 @@ from drf_spectacular.utils import extend_schema
 from gmail_service.serializers import (
     GmailConnectSerializer,
     GmailCallbackSerializer,
+    GmailTokenExchangeSerializer,
     SendEmailSerializer,
     ReadThreadQuerySerializer,
     SyncSingleThreadSerializer,
@@ -53,7 +54,8 @@ class GmailConnectView(APIView):
         except GmailAccount.DoesNotExist:
             pass 
         
-        redirect_uri = settings.BACKEND_URL + "/api/gmail/callback/"
+        # Use frontend callback URL instead of backend
+        redirect_uri = settings.FRONTEND_URL + "/auth/callback"
         auth_url = GmailService.generate_auth_url(email, redirect_uri)
 
         return Response({
@@ -73,7 +75,7 @@ class GmailCallbackView(APIView):
         code = request.GET.get("code")
         email_state = request.GET.get("state")
 
-        redirect_uri = settings.BACKEND_URL + "/api/gmail/callback/"
+        redirect_uri = settings.FRONTEND_URL + "/auth/callback"
         tokens = GmailService.exchange_code_for_token(
             email=email_state,
             code=code,
@@ -87,6 +89,40 @@ class GmailCallbackView(APIView):
 
         serializer = GmailCallbackSerializer(response_data)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class GmailTokenExchangeView(APIView):
+    """
+    New endpoint for frontend to exchange OAuth code for tokens
+    """
+    
+    @extend_schema(
+        request=GmailTokenExchangeSerializer,
+        responses={200: GmailCallbackSerializer},
+        description="Exchange OAuth code for access tokens (called by frontend)"
+    )
+    def post(self, request):
+        serializer = GmailTokenExchangeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        code = serializer.validated_data["code"]
+        email_state = serializer.validated_data["state"]
+
+        redirect_uri = settings.FRONTEND_URL + "/auth/callback"
+        tokens = GmailService.exchange_code_for_token(
+            email=email_state,
+            code=code,
+            redirect_uri=redirect_uri
+        )
+
+        response_data = {
+            "success": True,
+            "email": tokens["email"],
+            "access_token": tokens.get("access_token"),  # Include access token for frontend
+        }
+
+        return Response(response_data, status=status.HTTP_200_OK)
+
 
 class SendEmailView(APIView):
     @extend_schema(
