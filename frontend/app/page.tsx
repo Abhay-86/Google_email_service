@@ -1,3 +1,5 @@
+import { ChatLayout } from "@/components/chat/chat-layout";
+
 export default function HomePage() {
-  return <div>Welcome to the Google Email Service</div>;
+  return <ChatLayout />;
 }
