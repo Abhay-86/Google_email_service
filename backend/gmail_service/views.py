@@ -228,12 +228,26 @@ class ReadThreadView(APIView):
                 timestamp_obj = timezone.now()
 
             if not EmailMessage.objects.filter(message_id=m["message_id"]).exists():
+                # Find the template_id for this thread by looking at SentEmail records
+                template_id = None
+                try:
+                    from chat.models import SentEmail
+                    sent_email = SentEmail.objects.filter(
+                        sender=acc,
+                        thread_id=thread_id,
+                        status='sent'
+                    ).first()
+                    if sent_email:
+                        template_id = sent_email.template.id
+                except Exception:
+                    pass
+                    
                 EmailMessage.objects.create(
                     thread=thread,
                     message_id=m["message_id"],
                     direction=m["direction"],
                     timestamp=timestamp_obj,
-                    template_id=None
+                    template_id=template_id
                 )
 
         return Response({"messages": msgs}, status=200)
@@ -292,12 +306,26 @@ class SyncSingleThreadView(APIView):
                 # If all else fails, use current time
                 timestamp_obj = timezone.now()
 
+            # Find the template_id for this thread by looking at SentEmail records
+            template_id = None
+            try:
+                from chat.models import SentEmail
+                sent_email = SentEmail.objects.filter(
+                    sender=acc,
+                    thread_id=thread_id,
+                    status='sent'
+                ).first()
+                if sent_email:
+                    template_id = sent_email.template.id
+            except Exception:
+                pass
+
             EmailMessage.objects.create(
                 thread=thread,
                 message_id=msg_id,
                 direction=m["direction"],
                 timestamp=timestamp_obj,
-                template_id=None,
+                template_id=template_id,
             )
 
             new_msg_count += 1

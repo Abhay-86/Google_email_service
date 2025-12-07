@@ -99,3 +99,42 @@ class SentEmail(models.Model):
     
     def __str__(self):
         return f"Email: {self.template.subject[:30]} -> {self.vendor_name_at_time} ({self.status})"
+
+
+class VendorQuotation(models.Model):
+    """
+    Store vendor replies/quotations received for sent emails.
+    Links to EmailMessage (INBOUND) and SentEmail to track quotations.
+    """
+    sent_email = models.ForeignKey(SentEmail, related_name="quotations", on_delete=models.CASCADE)
+    email_message = models.OneToOneField(
+        'gmail_service.EmailMessage', 
+        related_name="quotation", 
+        on_delete=models.CASCADE,
+        help_text="Link to the INBOUND EmailMessage record"
+    )
+    
+    # Parsed content (we'll get subject/body from the Gmail API when needed)
+    subject = models.CharField(max_length=500, blank=True)
+    body = models.TextField(blank=True)
+    
+    # Quotation analysis (can be enhanced with AI parsing later)
+    quoted_amount = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True, help_text="Extracted quotation amount")
+    currency = models.CharField(max_length=10, null=True, blank=True, help_text="Currency code (USD, EUR, etc.)")
+    
+    # Status
+    is_reviewed = models.BooleanField(default=False)
+    notes = models.TextField(null=True, blank=True, help_text="Admin notes about this quotation")
+    
+    # Metadata
+    parsed_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-email_message__timestamp']
+        
+    def __str__(self):
+        return f"Quotation from {self.sent_email.vendor_name_at_time} - {self.subject}"
+    
+    @property
+    def received_at(self):
+        return self.email_message.timestamp
