@@ -13,6 +13,9 @@ interface ChatSidebarProps {
   onConnectGmail: () => void
   onDisconnectGmail: () => void
   onNewChat: () => void
+  chatSessions: Array<{ id: number; title: string; created_at?: string; is_submitted?: boolean }>
+  currentSessionId: number | null
+  onSelectChat: (sessionId: number) => void
 }
 
 export function ChatSidebar({
@@ -23,6 +26,9 @@ export function ChatSidebar({
   onConnectGmail,
   onDisconnectGmail,
   onNewChat,
+  chatSessions,
+  currentSessionId,
+  onSelectChat,
 }: ChatSidebarProps) {
   return (
     <>
@@ -53,17 +59,44 @@ export function ChatSidebar({
           </div>
         )}
 
-        {/* Chat Sessions would go here */}
+        {/* Chat Sessions */}
         <ScrollArea className="flex-1 px-2">
           <div className="space-y-1 p-2">
             {!isConnected ? (
               <p className="text-sm text-muted-foreground text-center py-4">
                 Connect Gmail to start chatting
               </p>
-            ) : (
+            ) : chatSessions.filter(session => !session.is_submitted).length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">
-                Ready to chat! Start a new conversation.
+                No active chats. Start a new conversation!
               </p>
+            ) : (
+              chatSessions
+                .filter(session => !session.is_submitted) // Hide submitted chats
+                .map((session) => (
+                  <Button
+                    key={session.id}
+                    onClick={() => onSelectChat(session.id)}
+                    variant="ghost"
+                    className={cn(
+                      "w-full justify-start text-left p-3 h-auto rounded-lg",
+                      currentSessionId === session.id 
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground" 
+                        : "hover:bg-sidebar-accent/50"
+                    )}
+                  >
+                    <div className="flex flex-col items-start gap-1 min-w-0">
+                      <span className="font-medium truncate w-full">
+                        {session.title}
+                      </span>
+                      {session.created_at && (
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(session.created_at).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                  </Button>
+                ))
             )}
           </div>
         </ScrollArea>

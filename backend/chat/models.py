@@ -37,3 +37,22 @@ class ChatMessage(models.Model):
 
     def __str__(self):
         return f"{self.role}: {self.content[:40]}"
+
+
+class EmailTemplate(models.Model):
+    """
+    Generated email template and subject for a chat session.
+    Created when user submits a chat session for email generation.
+    """
+    session = models.OneToOneField(ChatSession, related_name="email_template", on_delete=models.CASCADE)
+    
+    subject = models.CharField(max_length=500)
+    template_body = models.TextField()
+    
+    # Track generation metadata
+    generated_at = models.DateTimeField(auto_now_add=True)
+    is_sent = models.BooleanField(default=False)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    
+    def __str__(self):
+        return f"Email Template for Session {self.session.id}: {self.subject[:50]}"

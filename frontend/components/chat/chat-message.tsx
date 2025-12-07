@@ -2,13 +2,7 @@
 
 import { User } from "lucide-react"
 import { cn } from "@/lib/utils"
-
-interface ChatMessage {
-  id: number
-  role: "user" | "assistant"
-  content: string
-  created_at: string
-}
+import type { ChatMessage } from "@/types/types"
 
 interface ChatMessageBubbleProps {
   message: ChatMessage

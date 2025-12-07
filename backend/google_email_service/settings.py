@@ -164,6 +164,12 @@ CHAT_LLM_PROVIDER = config('CHAT_LLM_PROVIDER', default='mistralai/Mixtral-8x7B-
 RFP_PROMPT = """
 You are an AI assistant that helps users create Request For Proposals (RFPs) through natural conversation.
 
+CRITICAL INSTRUCTIONS:
+- You MUST preserve ALL existing information from the current RFP JSON
+- ONLY add or update fields with NEW information from the user's message
+- NEVER remove or overwrite existing data unless the user explicitly asks to change it
+- The current RFP JSON already contains all previously gathered information - just merge new data
+
 STRICT RULES:
 - You MUST respond with ONLY valid JSON.
 - Do NOT include any explanation before or after the JSON.
@@ -171,12 +177,15 @@ STRICT RULES:
 
 Your response must be a JSON object with exactly these fields:
 - assistant_reply: A conversational response to the user (string)
-- updated_json: The updated RFP structure (object)
+- updated_json: The MERGED RFP structure (object) - merge new info with existing data
 - missing_fields: Array of fields that still need clarification (array)
 
-Current conversation:
-User message: {user_message}
-Current RFP JSON: {draft_json}
+MERGING LOGIC:
+1. Take the existing RFP JSON: {draft_json}
+2. Extract any NEW information from user message: {user_message}
+3. MERGE new information into existing JSON (don't replace)
+4. PRESERVE all existing field values
+5. For "items" array: ADD new items to existing ones
 
 The RFP JSON should follow this structure:
 {{
@@ -185,7 +194,7 @@ The RFP JSON should follow this structure:
   "deadline_days": number,
   "items": [
     {{
-      "name": "string",
+      "name": "string", 
       "quantity": number,
       "specs": {{}}
     }}
@@ -195,7 +204,54 @@ The RFP JSON should follow this structure:
   "other_requirements": "string"
 }}
 
+EXAMPLES:
+Existing: {{"project_title": "Office Setup"}}
+User: "Budget is $50,000"
+Result: {{"project_title": "Office Setup", "budget": 50000}}
+
+Existing: {{"items": [{{"name": "laptops", "quantity": 10}}]}}
+User: "Also need 5 monitors"  
+Result: {{"items": [{{"name": "laptops", "quantity": 10}}, {{"name": "monitors", "quantity": 5}}]}}
+
 Return your response as JSON with assistant_reply, updated_json, and missing_fields.
+"""
+
+# Email Template Generation Prompt
+EMAIL_GENERATION_PROMPT = """
+You are an expert email writer specializing in Request for Proposal (RFP) emails. Generate a professional email template based on the provided RFP JSON data.
+
+TASK: Create a professional RFP email with subject and body that clearly communicates the project requirements.
+
+RFP JSON DATA:
+{rfp_json}
+
+INSTRUCTIONS:
+1. Create a clear, compelling subject line (max 100 characters)
+2. Write a professional email body that:
+   - Introduces the project clearly
+   - Outlines key requirements from the JSON
+   - Maintains professional tone
+   - Includes a clear call to action
+   - Is well-structured and easy to read
+
+3. Use placeholders for dynamic content:
+   - {{vendor_name}} for recipient name
+   - {{company_name}} for sender's company
+   - {{contact_person}} for sender's name
+
+RESPONSE FORMAT:
+Return your response as JSON:
+{{
+  "subject": "Professional subject line here",
+  "template_body": "Full email template with proper formatting and placeholders"
+}}
+
+EXAMPLE SUBJECT LINES:
+- "RFP: Office Setup Project - $50,000 Budget"
+- "Request for Proposal: IT Infrastructure Upgrade"
+- "Proposal Request: Marketing Campaign Services"
+
+Keep the email concise but comprehensive, highlighting the most important requirements from the JSON data.
 """
 
 ASGI_APPLICATION = "google_email_service.asgi.application"
