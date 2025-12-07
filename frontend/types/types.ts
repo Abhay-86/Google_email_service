@@ -196,3 +196,15 @@ export interface Vendor {
   created_at: string;
   updated_at: string;
 }
+
+export interface ChatVendor extends Vendor {
+  email_status: 'pending' | 'sent' | 'failed';
+}
+
+export interface EmailStats {
+  template_subject: string;
+  sent_count: number;
+  failed_count: number;
+  remaining_count: number;
+  total_vendors: number;
+}

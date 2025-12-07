@@ -6,7 +6,7 @@ from drf_spectacular.utils import extend_schema, OpenApiExample
 from gmail_service.models import GmailAccount
 from vendors.models import Vendor
 from gmail_service.services.gmail import GmailService
-from .models import ChatSession, ChatMessage, EmailTemplate
+from .models import ChatSession, ChatMessage, EmailTemplate, SentEmail
 from .serializers import (
     ChatRequestSerializer,
     StartChatSerializer,
@@ -369,41 +369,111 @@ class EmailTemplateView(APIView):
 
 class VendorSelectionView(APIView):
     """
-    Get vendors for email template sending
+    Get vendors for email template sending, filtering out already sent vendors
     """
     
     @extend_schema(
-        summary="Get All Vendors",
-        description="Get list of all vendors to send RFP emails to",
+        summary="Get Available Vendors",
+        description="Get list of vendors to send RFP emails to, excluding those already sent the selected template",
         responses={200: VendorSelectionResponseSerializer}
     )
     def get(self, request):
         try:
-            vendors = Vendor.objects.all()
-            vendor_list = [{
-                "id": vendor.id,
-                "name": vendor.name,
-                "email": vendor.email,
-                "company": vendor.company,
-                "phone": vendor.phone
-            } for vendor in vendors]
+            template_id = request.GET.get('template_id')
+            user_email = request.GET.get('user_email')
             
-            return Response({
+            vendors = Vendor.objects.all()
+            
+            # If template_id is provided, filter out vendors that already received this template
+            if template_id:
+                try:
+                    email_template = EmailTemplate.objects.get(id=template_id)
+                    
+                    # Get vendors that have already been sent this template
+                    sent_vendor_ids = SentEmail.objects.filter(
+                        template=email_template,
+                        status='sent'  # Only exclude successfully sent emails
+                    ).values_list('vendor_id', flat=True)
+                    
+                    # Exclude vendors that already received the email
+                    vendors = vendors.exclude(id__in=sent_vendor_ids)
+                    
+                except EmailTemplate.DoesNotExist:
+                    pass  # If template doesn't exist, show all vendors
+            
+            vendor_list = []
+            for vendor in vendors:
+                vendor_data = {
+                    "id": vendor.id,
+                    "name": vendor.name,
+                    "email": vendor.email,
+                    "company": vendor.company,
+                    "phone": vendor.phone
+                }
+                
+                # Add sent status if template_id is provided
+                if template_id:
+                    sent_email = SentEmail.objects.filter(
+                        template_id=template_id,
+                        vendor=vendor
+                    ).first()
+                    
+                    if sent_email:
+                        vendor_data["email_status"] = {
+                            "status": sent_email.status,
+                            "sent_at": sent_email.sent_at.isoformat() if sent_email.sent_at else None,
+                            "error": sent_email.error_message
+                        }
+                    else:
+                        vendor_data["email_status"] = {"status": "not_sent"}
+                
+                vendor_list.append(vendor_data)
+            
+            # If template_id is provided, also return send statistics
+            response_data = {
                 "vendors": vendor_list,
                 "total": len(vendor_list)
-            })
+            }
+            
+            if template_id:
+                try:
+                    email_template = EmailTemplate.objects.get(id=template_id)
+                    sent_count = SentEmail.objects.filter(
+                        template=email_template,
+                        status='sent'
+                    ).count()
+                    
+                    failed_count = SentEmail.objects.filter(
+                        template=email_template,
+                        status='failed'
+                    ).count()
+                    
+                    total_vendors = Vendor.objects.count()
+                    
+                    response_data["email_stats"] = {
+                        "sent_count": sent_count,
+                        "failed_count": failed_count,
+                        "remaining_count": len(vendor_list),
+                        "total_vendors": total_vendors,
+                        "template_subject": email_template.subject
+                    }
+                except EmailTemplate.DoesNotExist:
+                    pass
+            
+            return Response(response_data)
+            
         except Exception as e:
             return Response({"error": f"Failed to get vendors: {str(e)}"}, status=500)
 
 
 class SendTemplateEmailView(APIView):
     """
-    Send email template to selected vendors
+    Send email template to a single vendor
     """
     
     @extend_schema(
         summary="Send Template Email",
-        description="Send RFP email template to selected vendors",
+        description="Send RFP email template to a single vendor",
         request=SendTemplateEmailSerializer,
         responses={200: SendTemplateEmailResponseSerializer}
     )
@@ -412,61 +482,115 @@ class SendTemplateEmailView(APIView):
         serializer.is_valid(raise_exception=True)
         
         template_id = serializer.validated_data['template_id']
-        vendor_ids = serializer.validated_data['vendor_ids']
-        sender_email = serializer.validated_data['sender_email']
+        vendor_id = serializer.validated_data['vendor_id']
+        user_email = serializer.validated_data['user_email']
         
         try:
             # Get the email template
             email_template = EmailTemplate.objects.get(id=template_id)
             
             # Get sender's Gmail account
-            gmail_account = GmailAccount.objects.get(email=sender_email)
+            gmail_account = GmailAccount.objects.get(email=user_email)
             
-            # Get selected vendors
-            vendors = Vendor.objects.filter(id__in=vendor_ids)
+            # Get the vendor
+            vendor = Vendor.objects.get(id=vendor_id)
             
-            sent_emails = []
-            failed_emails = []
+            # Check if email was already sent to this vendor with this template
+            existing_send = SentEmail.objects.filter(
+                template=email_template,
+                vendor=vendor
+            ).first()
             
-            for vendor in vendors:
-                try:
-                    # Send email using Gmail service
-                    result = GmailService.send_email(
-                        gmail_account=gmail_account,
-                        to_email=vendor.email,
-                        subject=email_template.subject,
-                        body=email_template.template_body,
-                        attachments=[]
-                    )
-                    
-                    sent_emails.append({
-                        "vendor": vendor.name,
-                        "email": vendor.email,
-                        "message_id": result.get("message_id"),
-                        "thread_id": result.get("thread_id")
-                    })
-                    
-                except Exception as e:
-                    failed_emails.append({
-                        "vendor": vendor.name,
-                        "email": vendor.email,
-                        "error": str(e)
-                    })
+            if existing_send:
+                return Response({
+                    "success": False,
+                    "message": f"Email already sent to {vendor.name}",
+                    "vendor_id": vendor.id,
+                    "vendor_name": vendor.name,
+                    "vendor_email": vendor.email,
+                    "error": f"This template was already sent to {vendor.name} on {existing_send.sent_at.strftime('%Y-%m-%d %H:%M')}"
+                }, status=400)
             
-            return Response({
-                "status": "completed",
-                "sent_emails": sent_emails,
-                "failed_emails": failed_emails,
-                "total_sent": len(sent_emails),
-                "total_failed": len(failed_emails)
-            })
+            try:
+                # Send email using Gmail service
+                result = GmailService.send_email(
+                    gmail_account=gmail_account,
+                    to_email=vendor.email,
+                    subject=email_template.subject,
+                    body=email_template.template_body,
+                    attachments=[]
+                )
+                
+                # Record successful send
+                sent_email = SentEmail.objects.create(
+                    template=email_template,
+                    vendor=vendor,
+                    sender=gmail_account,
+                    vendor_email_at_time=vendor.email,
+                    vendor_name_at_time=vendor.name,
+                    vendor_company_at_time=vendor.company,
+                    message_id=result.get("message_id"),
+                    thread_id=result.get("thread_id"),
+                    status='sent'
+                )
+                
+                return Response({
+                    "success": True,
+                    "message": f"Email sent successfully to {vendor.name}",
+                    "vendor_id": vendor.id,
+                    "vendor_name": vendor.name,
+                    "vendor_email": vendor.email,
+                    "message_id": result.get("message_id"),
+                    "thread_id": result.get("thread_id"),
+                    "sent_at": sent_email.sent_at.isoformat()
+                })
+                
+            except Exception as e:
+                # Record failed send
+                SentEmail.objects.create(
+                    template=email_template,
+                    vendor=vendor,
+                    sender=gmail_account,
+                    vendor_email_at_time=vendor.email,
+                    vendor_name_at_time=vendor.name,
+                    vendor_company_at_time=vendor.company,
+                    status='failed',
+                    error_message=str(e)
+                )
+                
+                return Response({
+                    "success": False,
+                    "message": f"Failed to send email to {vendor.name}",
+                    "vendor_id": vendor.id,
+                    "vendor_name": vendor.name,
+                    "vendor_email": vendor.email,
+                    "error": str(e)
+                }, status=400)
             
         except EmailTemplate.DoesNotExist:
-            return Response({"error": "Email template not found"}, status=404)
+            return Response({
+                "success": False,
+                "message": "Email template not found",
+                "error": "Template does not exist"
+            }, status=404)
         except GmailAccount.DoesNotExist:
-            return Response({"error": "Gmail account not found"}, status=404)
+            return Response({
+                "success": False, 
+                "message": "Gmail account not found",
+                "error": "Please connect your Gmail account first"
+            }, status=404)
+        except Vendor.DoesNotExist:
+            return Response({
+                "success": False,
+                "message": "Vendor not found",
+                "error": "Vendor does not exist"
+            }, status=404)
         except Exception as e:
-            return Response({"error": f"Failed to send emails: {str(e)}"}, status=500)
+            return Response({
+                "success": False,
+                "message": "Failed to send email",
+                "error": str(e)
+            }, status=500)
 
 
 class UserTemplatesView(APIView):

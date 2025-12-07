@@ -1,5 +1,6 @@
 from django.db import models
 from gmail_service.models import GmailAccount
+from vendors.models import Vendor
 
 class ChatSession(models.Model):
     """
@@ -56,3 +57,45 @@ class EmailTemplate(models.Model):
     
     def __str__(self):
         return f"Email Template for Session {self.session.id}: {self.subject[:50]}"
+
+
+class SentEmail(models.Model):
+    """
+    Track emails sent to vendors using templates.
+    Prevents duplicate sends and provides email history.
+    """
+    template = models.ForeignKey(EmailTemplate, related_name="sent_emails", on_delete=models.CASCADE)
+    vendor = models.ForeignKey(Vendor, related_name="received_emails", on_delete=models.CASCADE)
+    sender = models.ForeignKey(GmailAccount, related_name="sent_emails", on_delete=models.CASCADE)
+    
+    # Email details
+    vendor_email_at_time = models.EmailField(help_text="Vendor's email when email was sent")
+    vendor_name_at_time = models.CharField(max_length=255, help_text="Vendor's name when email was sent")
+    vendor_company_at_time = models.CharField(max_length=255, null=True, blank=True, help_text="Vendor's company when email was sent")
+    
+    # Gmail response details
+    message_id = models.CharField(max_length=255, null=True, blank=True)
+    thread_id = models.CharField(max_length=255, null=True, blank=True)
+    
+    # Status tracking
+    status = models.CharField(
+        max_length=20, 
+        choices=[
+            ('sent', 'Sent Successfully'),
+            ('failed', 'Failed to Send'),
+            ('pending', 'Pending Send')
+        ],
+        default='pending'
+    )
+    error_message = models.TextField(null=True, blank=True)
+    
+    # Timestamps
+    sent_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        # Prevent duplicate sends: one template can only be sent to one vendor once
+        unique_together = ('template', 'vendor')
+        ordering = ['-sent_at']
+    
+    def __str__(self):
+        return f"Email: {self.template.subject[:30]} -> {self.vendor_name_at_time} ({self.status})"

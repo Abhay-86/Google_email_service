@@ -118,7 +118,7 @@ class GmailTokenExchangeView(APIView):
         response_data = {
             "success": True,
             "email": tokens["email"],
-            "access_token": tokens.get("access_token"),  # Include access token for frontend
+            "access_token": tokens.get("access_token"), 
         }
 
         return Response(response_data, status=status.HTTP_200_OK)
