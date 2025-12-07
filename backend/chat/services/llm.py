@@ -123,30 +123,49 @@ def extract_quotation_info(text):
         return None, None
 
     quotation_prompt = """
-    You are an expert at extracting financial quotation information from vendor email replies.
+    You are an expert at extracting and standardizing financial quotation information from vendor email replies.
     
-    Analyze the following email text from a vendor responding to a business inquiry and extract any quoted amounts and their currencies.
+    Analyze the following email text from a vendor responding to a business inquiry and extract any quoted amounts.
     
     Email text:
     {email_text}
     
     IMPORTANT: Look for various ways vendors might express pricing:
     - Direct amounts: "$5000", "USD 5000", "5000 dollars"
-    - Casual mentions: "40000 dollars", "give you for 25000"
+    - Indian Rupees: "₹40000", "40000 INR", "40000 rupees"
+    - Chinese Yuan: "¥3000", "3000 yuan", "3000 CNY", "3000 RMB"
+    - Euros: "€5000", "5000 EUR", "5000 euros"
+    - British Pounds: "£4000", "4000 GBP", "4000 pounds"
+    - Casual mentions: "give you for 25000", "can do 40k"
     - Estimates: "around $3000", "approximately 15000"
     - Range pricing: "between 5000-8000 USD"
+    
+    CRITICAL CURRENCY CONVERSION REQUIREMENT:
+    - Detect the ORIGINAL currency from the vendor's email
+    - Convert ALL amounts to USD using these approximate exchange rates:
+      * INR to USD: multiply by 0.012 (1 INR ≈ $0.012)
+      * CNY/Yuan to USD: multiply by 0.14 (1 CNY ≈ $0.14)
+      * EUR to USD: multiply by 1.1 (1 EUR ≈ $1.10)
+      * GBP to USD: multiply by 1.27 (1 GBP ≈ $1.27)
+      * JPY/Yen to USD: multiply by 0.0067 (1 JPY ≈ $0.0067)
+      * AED to USD: multiply by 0.27 (1 AED ≈ $0.27)
+      * CAD to USD: multiply by 0.72 (1 CAD ≈ $0.72)
+      * AUD to USD: multiply by 0.65 (1 AUD ≈ $0.65)
+    - If no currency symbol/mention is found, assume USD
+    - Round USD values to 2 decimal places
     
     Please return your response in the following JSON format:
     {{
         "quotations": [
             {{
-                "amount": "40000.00",
-                "currency": "USD",
+                "amount_original": "40000.00",
+                "currency_original": "INR",
+                "amount_usd": "480.00",
                 "context": "quoted price for the project"
             }}
         ],
         "primary_quotation": {{
-            "amount": "40000.00",
+            "amount": "480.00",
             "currency": "USD"
         }}
     }}
@@ -159,12 +178,18 @@ def extract_quotation_info(text):
     
     Rules:
     - Extract all monetary amounts that appear to be quotations, prices, or costs
-    - For amount, provide just the numeric value without currency symbols or commas
-    - If no currency is explicitly mentioned but amount is found, assume USD
-    - For currency, use standard 3-letter codes (USD, EUR, GBP, INR, etc.)
-    - For primary_quotation, select the largest or most important amount
+    - For each quotation, include:
+      * amount_original: the original amount from the email
+      * currency_original: the detected currency (INR, USD, EUR, CNY, etc.)
+      * amount_usd: the converted amount in USD (ALWAYS convert to USD)
+      * context: brief description of what this amount is for
+    - For primary_quotation, use the LARGEST USD amount
+    - For primary_quotation: use "amount" and "currency" (currency should ALWAYS be "USD")
     - Be flexible with informal language and various number formats
-    - Look for keywords like "quote", "price", "cost", "charge", "dollars", "give", etc.
+    - Look for keywords like "quote", "price", "cost", "charge", "dollars", "rupees", "yuan", "give", etc.
+    - Convert ALL currencies to USD, even if originally in INR, EUR, CNY, etc.
+    
+    Return ONLY the JSON. No explanation, no commentary, no markdown.
     """
 
     try:
