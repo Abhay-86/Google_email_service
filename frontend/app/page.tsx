@@ -6,9 +6,11 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { MessageSquare, Mail, Users, BarChart3, ArrowRight } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { useToast } from "@/hooks/use-toast"
 
 export default function HomePage() {
   const router = useRouter()
+  const { toast } = useToast()
   const [isConnected, setIsConnected] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
 
@@ -16,7 +18,7 @@ export default function HomePage() {
     // Check if user is connected to Gmail
     const storedEmail = localStorage.getItem('gmail_email')
     const storedToken = localStorage.getItem('gmail_access_token')
-    
+
     if (storedEmail && storedToken) {
       setUserEmail(storedEmail)
       setIsConnected(true)
@@ -25,7 +27,11 @@ export default function HomePage() {
 
   const handleCreateTemplate = () => {
     if (!isConnected) {
-      alert("Please connect your Gmail account first.")
+      toast({
+        title: "Gmail Account Required",
+        description: "Please connect your Gmail account first.",
+        variant: "destructive"
+      })
       return
     }
     router.push('/chat')
@@ -33,7 +39,11 @@ export default function HomePage() {
 
   const handleSendMail = () => {
     if (!isConnected) {
-      alert("Please connect your Gmail account first.")
+      toast({
+        title: "Gmail Account Required",
+        description: "Please connect your Gmail account first.",
+        variant: "destructive"
+      })
       return
     }
     router.push('/vendors')
@@ -41,7 +51,11 @@ export default function HomePage() {
 
   const handleManageVendors = () => {
     if (!isConnected) {
-      alert("Please connect your Gmail account first.")
+      toast({
+        title: "Gmail Account Required",
+        description: "Please connect your Gmail account first.",
+        variant: "destructive"
+      })
       return
     }
     router.push('/vendors/manage')
@@ -49,7 +63,11 @@ export default function HomePage() {
 
   const handleViewDashboard = () => {
     if (!isConnected) {
-      alert("Please connect your Gmail account first.")
+      toast({
+        title: "Gmail Account Required",
+        description: "Please connect your Gmail account first.",
+        variant: "destructive"
+      })
       return
     }
     router.push('/dashboard')
@@ -70,7 +88,7 @@ export default function HomePage() {
           <p className="text-lg text-gray-600 dark:text-gray-300 mb-6">
             Streamline your vendor communication and quotation management
           </p>
-          
+
           {isConnected ? (
             <div className="flex items-center justify-center gap-2">
               <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
