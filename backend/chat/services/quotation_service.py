@@ -7,6 +7,7 @@ from gmail_service.services.gmail import GmailService
 from gmail_service.views import SyncSingleThreadView
 from django.http import HttpRequest
 from rest_framework.request import Request
+from chat.services.llm import extract_quotation_info
 
 
 class QuotationService:
@@ -69,7 +70,7 @@ class QuotationService:
                 )
                 
                 # Extract quotation info using LLM service
-                from chat.services.llm import extract_quotation_info
+                
                 quoted_amount, currency = extract_quotation_info(f"{subject} {body}")
                 
                 # Create quotation record

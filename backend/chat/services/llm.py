@@ -2,6 +2,7 @@ import json
 import requests
 from django.conf import settings
 from mistralai import Mistral
+from decimal import Decimal
 
 MISTRAL_MODEL = "mistral-large-latest"
 
@@ -121,7 +122,6 @@ def extract_quotation_info(text):
     if not text:
         return None, None
 
-    # Create a prompt specifically for quotation extraction
     quotation_prompt = """
     You are an expert at extracting financial quotation information from vendor email replies.
     
@@ -213,7 +213,6 @@ def extract_quotation_info(text):
         primary = parsed.get("primary_quotation")
         if primary and primary.get("amount") and primary.get("currency"):
             try:
-                from decimal import Decimal
                 amount = Decimal(str(primary["amount"]).replace(',', ''))
                 currency = primary["currency"]
                 return amount, currency

@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from drf_spectacular.utils import extend_schema
+from chat.models import SentEmail
 from gmail_service.serializers import (
     GmailConnectSerializer,
     GmailCallbackSerializer,
@@ -231,7 +232,7 @@ class ReadThreadView(APIView):
                 # Find the template_id for this thread by looking at SentEmail records
                 template_id = None
                 try:
-                    from chat.models import SentEmail
+                    
                     sent_email = SentEmail.objects.filter(
                         sender=acc,
                         thread_id=thread_id,
@@ -309,7 +310,6 @@ class SyncSingleThreadView(APIView):
             # Find the template_id for this thread by looking at SentEmail records
             template_id = None
             try:
-                from chat.models import SentEmail
                 sent_email = SentEmail.objects.filter(
                     sender=acc,
                     thread_id=thread_id,

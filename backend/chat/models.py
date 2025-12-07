@@ -67,17 +67,11 @@ class SentEmail(models.Model):
     template = models.ForeignKey(EmailTemplate, related_name="sent_emails", on_delete=models.CASCADE)
     vendor = models.ForeignKey(Vendor, related_name="received_emails", on_delete=models.CASCADE)
     sender = models.ForeignKey(GmailAccount, related_name="sent_emails", on_delete=models.CASCADE)
-    
-    # Email details
     vendor_email_at_time = models.EmailField(help_text="Vendor's email when email was sent")
     vendor_name_at_time = models.CharField(max_length=255, help_text="Vendor's name when email was sent")
     vendor_company_at_time = models.CharField(max_length=255, null=True, blank=True, help_text="Vendor's company when email was sent")
-    
-    # Gmail response details
     message_id = models.CharField(max_length=255, null=True, blank=True)
     thread_id = models.CharField(max_length=255, null=True, blank=True)
-    
-    # Status tracking
     status = models.CharField(
         max_length=20, 
         choices=[
@@ -88,12 +82,9 @@ class SentEmail(models.Model):
         default='pending'
     )
     error_message = models.TextField(null=True, blank=True)
-    
-    # Timestamps
     sent_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
-        # Prevent duplicate sends: one template can only be sent to one vendor once
         unique_together = ('template', 'vendor')
         ordering = ['-sent_at']
     
@@ -113,20 +104,12 @@ class VendorQuotation(models.Model):
         on_delete=models.CASCADE,
         help_text="Link to the INBOUND EmailMessage record"
     )
-    
-    # Parsed content (we'll get subject/body from the Gmail API when needed)
     subject = models.CharField(max_length=500, blank=True)
     body = models.TextField(blank=True)
-    
-    # Quotation analysis (can be enhanced with AI parsing later)
     quoted_amount = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True, help_text="Extracted quotation amount")
     currency = models.CharField(max_length=10, null=True, blank=True, help_text="Currency code (USD, EUR, etc.)")
-    
-    # Status
     is_reviewed = models.BooleanField(default=False)
     notes = models.TextField(null=True, blank=True, help_text="Admin notes about this quotation")
-    
-    # Metadata
     parsed_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:

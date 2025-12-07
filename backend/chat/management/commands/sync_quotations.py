@@ -3,13 +3,11 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from email.utils import parsedate_to_datetime
 import time
-import re
 from decimal import Decimal, InvalidOperation
-
 from chat.models import SentEmail, VendorQuotation
-from gmail_service.services.gmail import GmailService
+from gmail_service.services.gmail import GmailService, GmailAccount
 from gmail_service.models import EmailThread, EmailMessage
-
+from chat.services.llm import extract_quotation_info
 
 class Command(BaseCommand):
     help = 'Continuously sync vendor replies/quotations for sent emails'
@@ -59,7 +57,7 @@ class Command(BaseCommand):
                     self.stdout.write(
                         self.style.ERROR(f'Error during sync: {e}')
                     )
-                    time.sleep(60)  # Wait 1 minute before retrying
+                    time.sleep(60) 
 
     def sync_vendor_replies(self, options=None):
         """Sync replies for all sent emails that have thread_ids"""
@@ -76,7 +74,6 @@ class Command(BaseCommand):
             
         # Filter by user if specified
         if options and options.get('user_email'):
-            from gmail_service.models import GmailAccount
             try:
                 gmail_account = GmailAccount.objects.get(email=options['user_email'])
                 sent_emails = sent_emails.filter(sender=gmail_account)
@@ -157,7 +154,7 @@ class Command(BaseCommand):
                             )
                             
                             # Parse quotation amount from email body using centralized LLM service
-                            from chat.services.llm import extract_quotation_info
+                            
                             quoted_amount, currency = extract_quotation_info(email_content)
                             
                             # Update the existing empty quotation
@@ -226,7 +223,7 @@ class Command(BaseCommand):
                     continue
 
                 # Parse quotation amount from email body using centralized LLM service
-                from chat.services.llm import extract_quotation_info
+                
                 quoted_amount, currency = extract_quotation_info(email_content)
                 
                 # Log LLM extraction results

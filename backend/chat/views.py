@@ -3,7 +3,11 @@ from rest_framework.response import Response
 from rest_framework import status
 from drf_spectacular.utils import extend_schema, OpenApiExample
 from django.utils import timezone
-
+from django.core.management import call_command
+from io import StringIO
+from chat.services.quotation_service import QuotationService
+from gmail_service.views import SyncSingleThreadView
+from gmail_service.serializers import SyncSingleThreadSerializer
 from gmail_service.models import GmailAccount
 from vendors.models import Vendor
 from gmail_service.services.gmail import GmailService
@@ -26,7 +30,7 @@ from .serializers import (
 )
 from .services.chat_service import ChatService
 from .services.email_service import generate_email_template
-
+from django.core.management import call_command
 
 class ChatView(APIView):
     """
@@ -702,7 +706,7 @@ class VendorQuotationsView(APIView):
             )
             
             # Process any new inbound messages first using the improved sync command
-            from django.core.management import call_command
+            
             call_command(
                 'sync_quotations',
                 once=True,
@@ -816,8 +820,7 @@ class SyncQuotationsView(APIView):
                 })
             
             # Use existing SyncSingleThreadView for each thread
-            from gmail_service.views import SyncSingleThreadView
-            from gmail_service.serializers import SyncSingleThreadSerializer
+           
             
             total_synced = 0
             errors = []
@@ -857,8 +860,7 @@ class SyncQuotationsView(APIView):
             
             # After syncing, process the new inbound messages using improved sync command
             try:
-                from django.core.management import call_command
-                from io import StringIO
+                
                 
                 # Capture the output of the sync command
                 output_buffer = StringIO()
@@ -884,7 +886,7 @@ class SyncQuotationsView(APIView):
             except Exception as e:
                 # Fallback to original quotation service
                 try:
-                    from chat.services.quotation_service import QuotationService
+                    
                     new_quotations = QuotationService.process_inbound_messages_for_template(template_id, gmail_account)
                     
                     return Response({
