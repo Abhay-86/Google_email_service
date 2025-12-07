@@ -21,12 +21,12 @@ def parse_email_response(raw_response):
         
         # Remove markdown code block markers
         if cleaned_response.startswith('```json'):
-            cleaned_response = cleaned_response[7:]  # Remove ```json
+            cleaned_response = cleaned_response[7:]  
         elif cleaned_response.startswith('```'):
-            cleaned_response = cleaned_response[3:]   # Remove ```
-            
+            cleaned_response = cleaned_response[3:] 
+
         if cleaned_response.endswith('```'):
-            cleaned_response = cleaned_response[:-3]  # Remove trailing ```
+            cleaned_response = cleaned_response[:-3]  
             
         cleaned_response = cleaned_response.strip()
         
@@ -52,7 +52,7 @@ def parse_email_response(raw_response):
                 if current_section == "template_body":
                     result["template_body"] = '\n'.join(content_lines).strip()
                 current_section = "subject"
-                result["subject"] = line[8:].strip()  # Remove "Subject:" prefix
+                result["subject"] = line[8:].strip() 
                 content_lines = []
             elif line.lower().startswith('template_body:') or line.lower().startswith('body:'):
                 if current_section == "subject" and content_lines:
@@ -77,14 +77,15 @@ def parse_email_response(raw_response):
             "template_body": "Dear {{vendor_name}},\n\nWe would like to request a proposal for our project requirements.\n\nBest regards,\n{{contact_person}}"
         }
 
-def mistral_generate_email(rfp_json):
+def mistral_generate_email(rfp_json, user_email):
     """
     Generate email template using Mistral API.
     """
     client = Mistral(api_key=settings.MISTRAL_API_KEY)
 
     prompt = settings.EMAIL_GENERATION_PROMPT.format(
-        rfp_json=json.dumps(rfp_json, indent=2)
+        rfp_json=json.dumps(rfp_json, indent=2),
+        user_email=user_email
     )
 
     try:
@@ -111,12 +112,13 @@ def mistral_generate_email(rfp_json):
             "raw": {"error": str(e)}
         }
 
-def hf_generate_email(rfp_json):
+def hf_generate_email(rfp_json, user_email):
     """
     Generate email template using HuggingFace API.
     """
     prompt = settings.EMAIL_GENERATION_PROMPT.format(
-        rfp_json=json.dumps(rfp_json, indent=2)
+        rfp_json=json.dumps(rfp_json, indent=2),
+        user_email=user_email
     )
 
     headers = {
@@ -162,7 +164,7 @@ def hf_generate_email(rfp_json):
             "raw": {"error": str(e)}
         }
 
-def generate_email_template(rfp_json):
+def generate_email_template(rfp_json, user_email):
     """
     Main entry point for email template generation.
     Uses the same provider as chat LLM (CHAT_LLM_PROVIDER setting).
@@ -171,9 +173,9 @@ def generate_email_template(rfp_json):
     provider = getattr(settings, "CHAT_LLM_PROVIDER", "mistral")
 
     if provider == "mistral":
-        result = mistral_generate_email(rfp_json)
+        result = mistral_generate_email(rfp_json, user_email)
     elif provider == "hf":
-        result = hf_generate_email(rfp_json)
+        result = hf_generate_email(rfp_json, user_email)
     else:
         raise ValueError(f"Invalid LLM provider '{provider}' in settings.CHAT_LLM_PROVIDER")
     

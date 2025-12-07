@@ -99,9 +99,6 @@ class QuotationService:
         Get subject and body for a specific message from Gmail
         """
         try:
-            # Use existing Gmail service to get message details
-            # This would need to be implemented in GmailService if not already available
-            # For now, return empty strings
             return "", ""
         except Exception:
             return "", ""

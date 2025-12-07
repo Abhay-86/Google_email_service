@@ -193,7 +193,7 @@ class ChatView(APIView):
                     "error": "No conversation data found. Please have a conversation first."
                 }, status=400)
                 
-            email_data = generate_email_template(session.draft_json)
+            email_data = generate_email_template(session.draft_json, session.gmail_account.email)
             
             return Response({
                 "status": "preview", 
@@ -350,7 +350,7 @@ class EmailTemplateView(APIView):
         
         # Generate email template using AI
         try:
-            email_result = generate_email_template(session.draft_json)
+            email_result = generate_email_template(session.draft_json, session.gmail_account.email)
             
             # Save the generated template
             email_template = EmailTemplate.objects.create(

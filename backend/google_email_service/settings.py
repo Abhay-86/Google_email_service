@@ -216,6 +216,7 @@ Result: {{"items": [{{"name": "laptops", "quantity": 10}}, {{"name": "monitors",
 Return your response as JSON with assistant_reply, updated_json, and missing_fields.
 """
 
+
 # Email Template Generation Prompt
 EMAIL_GENERATION_PROMPT = """
 You are an expert email writer specializing in Request for Proposal (RFP) emails. Generate a professional email template based on the provided RFP JSON data.
@@ -225,33 +226,78 @@ TASK: Create a professional RFP email with subject and body that clearly communi
 RFP JSON DATA:
 {rfp_json}
 
+SENDER EMAIL:
+{user_email}
+
 INSTRUCTIONS:
 1. Create a clear, compelling subject line (max 100 characters)
-2. Write a professional email body that:
-   - Introduces the project clearly
-   - Outlines key requirements from the JSON
-   - Maintains professional tone
-   - Includes a clear call to action
+
+2. Start with a general professional greeting:
+   - Use "Dear Vendor," or "Dear Sir/Madam," 
+   - DO NOT use {{vendor_name}} or any placeholder in the greeting
+   - Keep it simple and professional
+
+3. Write a professional email body that:
+   - Starts with a polite introduction (e.g., "I hope this email finds you well...")
+   - Clearly states the purpose
+   - Presents requirements in a clean, structured format
+   - Uses simple text formatting (avoid markdown symbols like **, ##, etc.)
+   - Includes clear call to action
    - Is well-structured and easy to read
 
-3. Use placeholders for dynamic content:
-   - {{vendor_name}} for recipient name
-   - {{company_name}} for sender's company
-   - {{contact_person}} for sender's name
+4. Format the requirements section clearly:
+   - Use plain text with clear labels
+   - Present items in a clean list format using simple dashes (-)
+   - Do NOT use markdown bold (**) or other markdown formatting
+   - Keep it simple and readable for plain text emails
+
+5. Extract the sender's name from the email address:
+   - Take the part before @ in {user_email}
+   - Remove any numbers, dots, or underscores
+   - Capitalize the first letter of each word
+   - Example: "john.doe123@example.com" → "John Doe"
+   - Example: "abhay_kumar@example.com" → "Abhay Kumar"
+   - Use ONLY this extracted name in the signature
+
+6. DO NOT use ANY placeholders:
+   - NO {{vendor_name}}
+   - NO {{company_name}}
+   - NO {{contact_person}}
+   - Use actual extracted sender name in signature
+
+EXAMPLE EMAIL FORMAT:
+Dear Vendor,
+
+I hope this email finds you well. I am writing on behalf of our organization to request a proposal for [project description]. Below are the key requirements for this project:
+
+Project Title: [Title from JSON]
+Items Required:
+- [Item 1] 
+- [Item 2]
+Budget: $[amount]
+Warranty: [warranty terms]
+Delivery Deadline: [deadline]
+Payment Terms: [terms]
+
+Please submit your proposal by [deadline date], outlining your pricing, delivery timeline, and any additional terms. We look forward to reviewing your submission.
+
+Best regards,
+[Extracted Name from Email]
 
 RESPONSE FORMAT:
 Return your response as JSON:
 {{
   "subject": "Professional subject line here",
-  "template_body": "Full email template with proper formatting and placeholders"
+  "template_body": "Full email template with clean formatting and extracted sender name"
 }}
 
-EXAMPLE SUBJECT LINES:
-- "RFP: Office Setup Project - $50,000 Budget"
-- "Request for Proposal: IT Infrastructure Upgrade"
-- "Proposal Request: Marketing Campaign Services"
+CRITICAL RULES:
+- Use general greeting (Dear Vendor, Dear Sir/Madam) - NO placeholders
+- Use clean plain text formatting - NO markdown symbols
+- Signature must ONLY contain the extracted name - NO placeholders
+- All information should be presented clearly and professionally
 
-Keep the email concise but comprehensive, highlighting the most important requirements from the JSON data.
+Return ONLY the JSON. No explanation, no commentary, no markdown code blocks.
 """
 
 ASGI_APPLICATION = "google_email_service.asgi.application"
