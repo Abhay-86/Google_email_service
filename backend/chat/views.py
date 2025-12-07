@@ -11,7 +11,7 @@ from gmail_service.serializers import SyncSingleThreadSerializer
 from gmail_service.models import GmailAccount
 from vendors.models import Vendor
 from gmail_service.services.gmail import GmailService
-from .models import ChatSession, ChatMessage, EmailTemplate, SentEmail, VendorQuotation
+from .models import ChatSession, ChatMessage, EmailTemplate, SentEmail, VendorQuotation, VendorScore
 from gmail_service.models import EmailThread, EmailMessage
 from .serializers import (
     ChatRequestSerializer,
@@ -30,6 +30,7 @@ from .serializers import (
 )
 from .services.chat_service import ChatService
 from .services.email_service import generate_email_template
+from .services.scoring_service import ScoringService
 from django.core.management import call_command
 
 class ChatView(APIView):
@@ -747,7 +748,30 @@ class VendorQuotationsView(APIView):
                         "notes": quotation.notes
                     })
                 
+                # Add vendor score if it exists
+                try:
+                    vendor_score = VendorScore.objects.get(sent_email=sent_email)
+                    vendor_data["score"] = {
+                        "final_score": float(vendor_score.final_score),
+                        "rank": vendor_score.rank,
+                        "price_score": float(vendor_score.price_score),
+                        "vendor_quality_score": float(vendor_score.vendor_quality_score),
+                        "breakdown": {
+                            "verification": float(vendor_score.verification_score),
+                            "rating": float(vendor_score.rating_score),
+                            "delivery": float(vendor_score.delivery_score),
+                            "warranty": float(vendor_score.warranty_score),
+                            "response": float(vendor_score.response_score)
+                        }
+                    }
+                except VendorScore.DoesNotExist:
+                    vendor_data["score"] = None
+                
                 quotations_data.append(vendor_data)
+            
+            # Sort by rank if scores exist
+            quotations_data.sort(key=lambda x: (x["score"]["rank"] if x["score"] and x["score"]["rank"] else float('inf')))
+
             
             return Response({
                 "template": {
@@ -909,3 +933,74 @@ class SyncQuotationsView(APIView):
             return Response({"error": "Template not found"}, status=404)
         except Exception as e:
             return Response({"error": f"Failed to sync quotations: {str(e)}"}, status=500)
+
+
+class CalculateVendorScoresView(APIView):
+    """
+    Calculate vendor scores for all quotations in a template.
+    Scores based on 50% price + 50% vendor quality metrics.
+    """
+    
+    @extend_schema(
+        description="Calculate scores for all vendors who responded to an RFP template",
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "template_id": {"type": "integer"},
+                    "user_email": {"type": "string", "format": "email"}
+                },
+                "required": ["template_id", "user_email"]
+            }
+        },
+        responses={200: dict}
+    )
+    def post(self, request):
+        template_id = request.data.get('template_id')
+        user_email = request.data.get('user_email')
+        
+        if not template_id or not user_email:
+            return Response({
+                "error": "template_id and user_email are required"
+            }, status=400)
+        
+        try:
+            # Verify user has access to this template
+            gmail_account = GmailAccount.objects.get(email=user_email)
+            template = EmailTemplate.objects.get(
+                id=template_id,
+                session__gmail_account=gmail_account
+            )
+            
+            # Get budget from session's draft_json
+            draft_json = template.session.draft_json
+            budget = draft_json.get('budget')
+            
+            if not budget:
+                return Response({
+                    "error": "No budget found in RFP data. Please ensure your RFP includes a budget."
+                }, status=400)
+            
+            # Calculate scores for all vendors
+            from decimal import Decimal
+            vendor_scores = ScoringService.calculate_scores_for_template(
+                template, 
+                Decimal(str(budget))
+            )
+            
+            return Response({
+                "success": True,
+                "scores_calculated": len(vendor_scores),
+                "message": f"Successfully calculated scores for {len(vendor_scores)} vendors",
+                "top_ranked": {
+                    "vendor_name": vendor_scores[0].sent_email.vendor_name_at_time if vendor_scores else None,
+                    "final_score": float(vendor_scores[0].final_score) if vendor_scores else None
+                } if vendor_scores else None
+            })
+            
+        except GmailAccount.DoesNotExist:
+            return Response({"error": "Gmail account not found"}, status=404)
+        except EmailTemplate.DoesNotExist:
+            return Response({"error": "Template not found"}, status=404)
+        except Exception as e:
+            return Response({"error": f"Failed to calculate scores: {str(e)}"}, status=500)

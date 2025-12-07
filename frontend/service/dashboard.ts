@@ -13,6 +13,20 @@ export interface UserTemplatesResponse {
   total: number;
 }
 
+export interface VendorScore {
+  final_score: number;
+  rank: number;
+  price_score: number;
+  vendor_quality_score: number;
+  breakdown: {
+    verification: number;
+    rating: number;
+    delivery: number;
+    warranty: number;
+    response: number;
+  };
+}
+
 export interface VendorQuotation {
   id: number;
   message_id: string;
@@ -33,6 +47,7 @@ export interface VendorWithQuotations {
   email_sent_at: string;
   thread_id: string;
   quotations: VendorQuotation[];
+  score?: VendorScore | null;
 }
 
 export interface QuotationsResponse {
@@ -96,7 +111,7 @@ export const getVendorQuotations = async (templateId: number): Promise<Quotation
     }
 
     const response = await axiosInstance.get('/chat/quotations/', {
-      params: { 
+      params: {
         template_id: templateId,
         user_email: userEmail
       }
@@ -109,22 +124,42 @@ export const getVendorQuotations = async (templateId: number): Promise<Quotation
   }
 };
 
+// Calculate vendor scores
+export const calculateVendorScores = async (templateId: number): Promise<any> => {
+  try {
+    const userEmail = localStorage.getItem('gmail_email');
+    if (!userEmail) {
+      throw new Error('User email not found in localStorage');
+    }
+
+    const response = await axiosInstance.post('/chat/calculate-scores/', {
+      template_id: templateId,
+      user_email: userEmail
+    });
+
+    return response.data;
+  } catch (error) {
+    console.error('Error calculating scores:', error);
+    throw error;
+  }
+};
+
 // Get vendor contact details from vendor table
 export const getVendorContactDetails = async (vendorId: number): Promise<VendorContactDetails | null> => {
   try {
-    const response = await axiosInstance.get('/vendors/vendors/', {
+    const response = await axiosInstance.get('/vendors/', {
       params: { id: vendorId }
     });
 
     const vendors = response.data.results || [];
     const vendorData = vendors.length > 0 ? vendors[0] : null;
-    
+
     // Debug log to check if phone number is being fetched
     console.log('Vendor data fetched:', vendorData);
     if (vendorData) {
       console.log('Phone number in vendor data:', vendorData.phone);
     }
-    
+
     return vendorData;
   } catch (error) {
     console.error('Error fetching vendor contact details:', error);
@@ -132,17 +167,17 @@ export const getVendorContactDetails = async (vendorId: number): Promise<VendorC
   }
 };
 
-// Process quotations to get top 2 vendors with lowest quotes
+// Process quotations to get top ranked vendors (by score if available, otherwise by price)
 export const processLowestQuotations = async (quotationsResponse: QuotationsResponse): Promise<DashboardVendor[]> => {
   const vendorsWithQuotes: DashboardVendor[] = [];
 
   // Filter vendors that have quotations with amounts
   for (const vendor of quotationsResponse.vendors_with_quotations) {
     const validQuotations = vendor.quotations.filter(q => q.quoted_amount && q.quoted_amount > 0);
-    
+
     if (validQuotations.length > 0) {
       // Find lowest quotation for this vendor
-      const lowestQuotation = validQuotations.reduce((lowest, current) => 
+      const lowestQuotation = validQuotations.reduce((lowest, current) =>
         (current.quoted_amount || Infinity) < (lowest.quoted_amount || Infinity) ? current : lowest
       );
 
@@ -162,10 +197,21 @@ export const processLowestQuotations = async (quotationsResponse: QuotationsResp
     }
   }
 
-  // Sort by lowest quotation amount and take top 2
-  return vendorsWithQuotes
-    .sort((a, b) => (a.lowest_quotation.quoted_amount || Infinity) - (b.lowest_quotation.quoted_amount || Infinity))
-    .slice(0, 2);
+  // Sort by score rank if scores exist, otherwise by lowest quotation amount
+  const hasScores = vendorsWithQuotes.some(v => v.score && v.score.rank);
+
+  if (hasScores) {
+    // Sort by rank (lower rank = better)
+    return vendorsWithQuotes
+      .filter(v => v.score && v.score.rank) // Only show scored vendors
+      .sort((a, b) => (a.score?.rank || Infinity) - (b.score?.rank || Infinity))
+      .slice(0, 5); // Show top 5 ranked vendors
+  } else {
+    // Fallback: Sort by lowest quotation amount and take top 2
+    return vendorsWithQuotes
+      .sort((a, b) => (a.lowest_quotation.quoted_amount || Infinity) - (b.lowest_quotation.quoted_amount || Infinity))
+      .slice(0, 2);
+  }
 };
 
 // Get dashboard data for a specific template
@@ -173,7 +219,7 @@ export const getDashboardDataForTemplate = async (templateId: number): Promise<D
   try {
     const quotationsResponse = await getVendorQuotations(templateId);
     const lowestVendors = await processLowestQuotations(quotationsResponse);
-    
+
     // Get template details
     const templatesResponse = await getUserTemplates();
     const selectedTemplate = templatesResponse.templates.find(t => t.id === templateId) || null;
