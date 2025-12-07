@@ -172,24 +172,26 @@ export default function QuotationsPage() {
         </div>
 
         {/* Template Selection */}
-        <Card className="mb-6">
+        <Card className="mb-6 bg-gray-800 border-gray-700">
           <CardHeader>
-            <CardTitle className="text-lg">Select Template</CardTitle>
+            <CardTitle className="text-lg text-white">Select Template</CardTitle>
           </CardHeader>
           <CardContent>
             <Select
               value={selectedTemplateId?.toString() || ""}
               onValueChange={(value: string) => setSelectedTemplateId(parseInt(value))}
             >
-              <SelectTrigger>
+              <SelectTrigger className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600">
                 <SelectValue placeholder="Choose a template" />
               </SelectTrigger>
               <SelectContent>
-                {templates.map((template) => (
+                {templates.map((template, index) => (
                   <SelectItem key={template.id} value={template.id.toString()}>
                     <div>
-                      <div className="font-medium">{template.subject}</div>
-                      <div className="text-xs text-gray-500">
+                      <div className="font-medium">
+                        Template #{index + 1}: {template.subject}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
                         Created: {new Date(template.generated_at).toLocaleDateString()}
                       </div>
                     </div>
