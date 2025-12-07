@@ -169,33 +169,30 @@ export interface ChatWebSocketMessage {
   message: any;
 }
 
-// Vendor API Types
+// Vendor API Types (matching Django backend model)
 export interface VendorCreateRequest {
   name: string;
-  email?: string;
+  email: string;
   phone?: string;
+  company?: string;
   address?: string;
-  website?: string;
-  description?: string;
 }
 
 export interface VendorUpdateRequest {
   name?: string;
   email?: string;
   phone?: string;
+  company?: string;
   address?: string;
-  website?: string;
-  description?: string;
 }
 
 export interface Vendor {
   id: number;
   name: string;
-  email: string | null;
+  email: string;
   phone: string | null;
+  company: string | null;
   address: string | null;
-  website: string | null;
-  description: string | null;
   created_at: string;
   updated_at: string;
 }
