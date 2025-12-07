@@ -216,6 +216,14 @@ export default function DashboardPage() {
           </div>
           
           <div className="flex gap-2">
+            <Button 
+              variant="default" 
+              size="sm"
+              onClick={() => router.push('/quotations')}
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              View Real Quotations
+            </Button>
             <Button variant="outline" size="sm">
               <Download className="h-4 w-4 mr-2" />
               Export
