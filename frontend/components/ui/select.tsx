@@ -85,7 +85,7 @@ const SelectContent = ({ children }: SelectContentProps) => {
   if (!open) return null
   
   return (
-    <div className="absolute top-full left-0 z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+    <div className="absolute top-full left-0 z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
       {children}
     </div>
   )
@@ -102,7 +102,7 @@ const SelectItem = ({ value, children, onSelect }: SelectItemProps) => {
   
   return (
     <div
-      className="cursor-pointer px-3 py-2 text-sm hover:bg-gray-100"
+      className="cursor-pointer px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-900 dark:text-white"
       onClick={handleSelect}
     >
       {children}

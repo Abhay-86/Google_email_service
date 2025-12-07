@@ -4,190 +4,135 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { 
   ArrowLeft, 
   BarChart3, 
-  TrendingUp, 
-  TrendingDown,
+  TrendingUp,
   Mail,
   Building2,
   Calendar,
   DollarSign,
-  Search,
-  Filter,
-  Download,
   RefreshCw,
   FileText,
-  CheckCircle,
   Clock,
-  XCircle
+  Trophy,
+  Medal,
+  User,
+  MessageSquare,
+  Phone,
+  MapPin
 } from "lucide-react"
 import { useRouter } from "next/navigation"
-
-// Mock data structure for quotations
-interface Quotation {
-  id: number
-  vendor: {
-    id: number
-    name: string
-    email: string
-    company: string
-  }
-  templateUsed: string
-  sentDate: string
-  responseDate?: string
-  status: 'sent' | 'responded' | 'pending' | 'expired'
-  quotedAmount?: number
-  currency: string
-  responseTime?: number // in hours
-  items?: Array<{
-    description: string
-    quantity: number
-    unitPrice: number
-    totalPrice: number
-  }>
-}
-
-// Mock data for demonstration
-const mockQuotations: Quotation[] = [
-  {
-    id: 1,
-    vendor: { id: 1, name: "ABC Electronics", email: "contact@abcelectronics.com", company: "ABC Electronics Ltd" },
-    templateUsed: "Standard Equipment Quote",
-    sentDate: "2024-12-01",
-    responseDate: "2024-12-02",
-    status: "responded",
-    quotedAmount: 15000,
-    currency: "USD",
-    responseTime: 24,
-    items: [
-      { description: "Laptop", quantity: 10, unitPrice: 1200, totalPrice: 12000 },
-      { description: "Monitor", quantity: 10, unitPrice: 300, totalPrice: 3000 }
-    ]
-  },
-  {
-    id: 2,
-    vendor: { id: 2, name: "Tech Solutions", email: "sales@techsolutions.com", company: "Tech Solutions Inc" },
-    templateUsed: "Standard Equipment Quote", 
-    sentDate: "2024-12-01",
-    responseDate: "2024-12-03",
-    status: "responded",
-    quotedAmount: 14500,
-    currency: "USD",
-    responseTime: 48,
-    items: [
-      { description: "Laptop", quantity: 10, unitPrice: 1150, totalPrice: 11500 },
-      { description: "Monitor", quantity: 10, unitPrice: 300, totalPrice: 3000 }
-    ]
-  },
-  {
-    id: 3,
-    vendor: { id: 3, name: "Global Supplies", email: "quotes@globalsupplies.com", company: "Global Supplies Co" },
-    templateUsed: "Standard Equipment Quote",
-    sentDate: "2024-12-01",
-    status: "pending",
-    currency: "USD",
-  },
-  {
-    id: 4,
-    vendor: { id: 4, name: "Prime Vendors", email: "info@primevendors.com", company: "Prime Vendors LLC" },
-    templateUsed: "Standard Equipment Quote",
-    sentDate: "2024-11-28",
-    status: "expired",
-    currency: "USD",
-  }
-]
+import { 
+  getUserTemplates, 
+  getDashboardDataForTemplate, 
+  Template, 
+  DashboardData 
+} from "@/service/dashboard"
+import { useToast } from "@/hooks/use-toast"
 
 export default function DashboardPage() {
   const router = useRouter()
-  const [quotations, setQuotations] = useState<Quotation[]>(mockQuotations)
-  const [filteredQuotations, setFilteredQuotations] = useState<Quotation[]>(mockQuotations)
-  const [loading, setLoading] = useState(false)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [sortBy, setSortBy] = useState<string>("date")
+  const { toast } = useToast()
+  
+  const [templates, setTemplates] = useState<Template[]>([])
+  const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null)
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
 
   useEffect(() => {
-    // Filter and sort quotations
-    let filtered = quotations
+    loadUserData()
+  }, [])
 
-    // Apply search filter
-    if (searchTerm.trim()) {
-      filtered = filtered.filter(q =>
-        q.vendor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        q.vendor.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        q.templateUsed.toLowerCase().includes(searchTerm.toLowerCase())
-      )
+  useEffect(() => {
+    if (selectedTemplateId && userEmail) {
+      loadDashboardData()
     }
+  }, [selectedTemplateId, userEmail])
 
-    // Apply status filter
-    if (statusFilter !== "all") {
-      filtered = filtered.filter(q => q.status === statusFilter)
+  const loadUserData = async () => {
+    const storedEmail = localStorage.getItem('gmail_email')
+    if (!storedEmail) {
+      toast({
+        title: "Error",
+        description: "Please connect your Gmail account first.",
+        variant: "destructive"
+      })
+      window.location.href = '/'
+      return
     }
-
-    // Apply sorting
-    filtered = [...filtered].sort((a, b) => {
-      switch (sortBy) {
-        case "date":
-          return new Date(b.sentDate).getTime() - new Date(a.sentDate).getTime()
-        case "amount":
-          return (b.quotedAmount || 0) - (a.quotedAmount || 0)
-        case "responseTime":
-          return (a.responseTime || Infinity) - (b.responseTime || Infinity)
-        case "vendor":
-          return a.vendor.name.localeCompare(b.vendor.name)
-        default:
-          return 0
+    
+    setUserEmail(storedEmail)
+    
+    try {
+      const templatesData = await getUserTemplates()
+      if (templatesData.templates && templatesData.templates.length > 0) {
+        setTemplates(templatesData.templates)
+        setSelectedTemplateId(templatesData.templates[0].id)
+      } else {
+        toast({
+          title: "No Templates Found", 
+          description: "Create email templates first by using the chat interface.",
+          variant: "destructive"
+        })
       }
-    })
-
-    setFilteredQuotations(filtered)
-  }, [quotations, searchTerm, statusFilter, sortBy])
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'responded':
-        return <CheckCircle className="h-4 w-4 text-green-600" />
-      case 'pending':
-        return <Clock className="h-4 w-4 text-yellow-600" />
-      case 'sent':
-        return <Mail className="h-4 w-4 text-blue-600" />
-      case 'expired':
-        return <XCircle className="h-4 w-4 text-red-600" />
-      default:
-        return <Clock className="h-4 w-4 text-gray-600" />
+    } catch (error) {
+      console.error("Error loading templates:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load templates.",
+        variant: "destructive"
+      })
+    } finally {
+      setLoading(false)
     }
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'responded':
-        return 'bg-green-100 text-green-800 border-green-200'
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200'
-      case 'sent':
-        return 'bg-blue-100 text-blue-800 border-blue-200'
-      case 'expired':
-        return 'bg-red-100 text-red-800 border-red-200'
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200'
+  const loadDashboardData = async () => {
+    if (!selectedTemplateId) return
+    
+    try {
+      setLoading(true)
+      const data = await getDashboardDataForTemplate(selectedTemplateId)
+      
+      // Debug log to check vendor contact details
+      console.log('Dashboard data received:', data)
+      data.lowest_vendors.forEach((vendor: any, index: number) => {
+        console.log(`Vendor ${index + 1} contact details:`, vendor.contact_details)
+        console.log(`Vendor ${index + 1} phone:`, vendor.contact_details?.phone)
+      })
+      
+      setDashboardData(data)
+    } catch (error) {
+      console.error("Error loading dashboard data:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load dashboard data.",
+        variant: "destructive"
+      })
+    } finally {
+      setLoading(false)
     }
   }
 
-  const respondedQuotations = quotations.filter(q => q.status === 'responded')
-  const avgResponseTime = respondedQuotations.length > 0
-    ? respondedQuotations.reduce((sum, q) => sum + (q.responseTime || 0), 0) / respondedQuotations.length
-    : 0
+  const formatCurrency = (amount: number | null, currency: string | null) => {
+    if (!amount) return 'Not specified'
+    const currencySymbol = currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : currency || ''
+    return `${currencySymbol}${amount.toLocaleString()}`
+  }
 
-  const lowestQuote = respondedQuotations.length > 0
-    ? Math.min(...respondedQuotations.map(q => q.quotedAmount || Infinity))
-    : 0
-
-  const highestQuote = respondedQuotations.length > 0
-    ? Math.max(...respondedQuotations.map(q => q.quotedAmount || 0))
-    : 0
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-orange-600" />
+          <p className="text-gray-600 dark:text-gray-300">Loading dashboard data...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -207,236 +152,313 @@ export default function DashboardPage() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
                 <BarChart3 className="h-8 w-8 text-orange-600" />
-                Quotation Dashboard
+                Vendor Dashboard
               </h1>
               <p className="text-gray-600 dark:text-gray-300">
-                Compare vendor quotations and track response metrics
+                View top 2 vendors with lowest quotations for each template
               </p>
             </div>
           </div>
           
           <div className="flex gap-2">
-            <Button variant="outline" size="sm">
-              <Download className="h-4 w-4 mr-2" />
-              Export
+            <Button 
+              variant="default" 
+              size="sm"
+              onClick={() => router.push('/quotations')}
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              View All Quotations
             </Button>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={loadDashboardData}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
             </Button>
           </div>
         </div>
 
-        {/* Summary Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                Total Quotations
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2">
-                <span className="text-2xl font-bold">{quotations.length}</span>
-                <FileText className="h-5 w-5 text-blue-600" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                Response Rate
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2">
-                <span className="text-2xl font-bold">
-                  {quotations.length > 0 ? Math.round((respondedQuotations.length / quotations.length) * 100) : 0}%
-                </span>
-                <TrendingUp className="h-5 w-5 text-green-600" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                Avg Response Time
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2">
-                <span className="text-2xl font-bold">{Math.round(avgResponseTime)}h</span>
-                <Clock className="h-5 w-5 text-yellow-600" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                Best Quote
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2">
-                <span className="text-2xl font-bold">
-                  ${lowestQuote > 0 ? lowestQuote.toLocaleString() : 'N/A'}
-                </span>
-                <DollarSign className="h-5 w-5 text-green-600" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Filters */}
-        <Card className="mb-6">
-          <CardContent className="pt-6">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Search by vendor, company, or template..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full md:w-48">
-                  <Filter className="h-4 w-4 mr-2" />
-                  <SelectValue placeholder="Filter by status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="responded">Responded</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="sent">Sent</SelectItem>
-                  <SelectItem value="expired">Expired</SelectItem>
-                </SelectContent>
-              </Select>
-              
-              <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger className="w-full md:w-48">
-                  <SelectValue placeholder="Sort by" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="date">Date</SelectItem>
-                  <SelectItem value="amount">Quote Amount</SelectItem>
-                  <SelectItem value="responseTime">Response Time</SelectItem>
-                  <SelectItem value="vendor">Vendor Name</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+        {/* Template Selection */}
+        <Card className="mb-6 bg-gray-800 border-gray-700">
+          <CardHeader>
+            <CardTitle className="text-lg text-white">Select Template</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Select
+              value={selectedTemplateId?.toString() || ""}
+              onValueChange={(value: string) => setSelectedTemplateId(parseInt(value))}
+            >
+              <SelectTrigger className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600">
+                <SelectValue placeholder="Choose a template" />
+              </SelectTrigger>
+              <SelectContent>
+                {templates.map((template, index) => (
+                  <SelectItem key={template.id} value={template.id.toString()}>
+                    <div>
+                      <div className="font-medium">
+                        Template #{index + 1}: {template.subject}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Created: {new Date(template.generated_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </CardContent>
         </Card>
 
-        {/* Quotations List */}
-        <div className="space-y-4">
-          {filteredQuotations.map((quotation) => (
-            <Card key={quotation.id} className="hover:shadow-lg transition-shadow">
-              <CardHeader className="pb-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <CardTitle className="text-lg">{quotation.vendor.name}</CardTitle>
-                      <Badge variant="outline" className={getStatusColor(quotation.status)}>
-                        <div className="flex items-center gap-1">
-                          {getStatusIcon(quotation.status)}
-                          {quotation.status.charAt(0).toUpperCase() + quotation.status.slice(1)}
-                        </div>
-                      </Badge>
-                    </div>
-                    
-                    <CardDescription className="flex flex-wrap gap-4 text-sm">
-                      <div className="flex items-center gap-1">
-                        <Building2 className="h-4 w-4" />
-                        {quotation.vendor.company}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Mail className="h-4 w-4" />
-                        {quotation.vendor.email}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <FileText className="h-4 w-4" />
-                        {quotation.templateUsed}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Calendar className="h-4 w-4" />
-                        Sent: {new Date(quotation.sentDate).toLocaleDateString()}
-                      </div>
-                    </CardDescription>
+        {/* Statistics */}
+        {dashboardData && (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <Mail className="h-4 w-4 text-blue-600" />
+                  <div className="ml-2">
+                    <p className="text-sm font-medium text-gray-600">Vendors Contacted</p>
+                    <p className="text-2xl font-bold">{dashboardData.total_vendors_contacted}</p>
                   </div>
-                  
-                  {quotation.quotedAmount && (
-                    <div className="text-right">
-                      <div className="text-2xl font-bold text-green-600">
-                        ${quotation.quotedAmount.toLocaleString()}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {quotation.currency}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </CardHeader>
-              
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {quotation.responseDate && (
-                    <div>
-                      <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Response Date</p>
-                      <p className="text-lg font-semibold">
-                        {new Date(quotation.responseDate).toLocaleDateString()}
-                      </p>
-                    </div>
-                  )}
-                  
-                  {quotation.responseTime && (
-                    <div>
-                      <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Response Time</p>
-                      <p className="text-lg font-semibold">{quotation.responseTime} hours</p>
-                    </div>
-                  )}
-                  
-                  {quotation.items && quotation.items.length > 0 && (
-                    <div className="md:col-span-2">
-                      <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Items Quoted</p>
-                      <div className="space-y-1">
-                        {quotation.items.map((item, index) => (
-                          <div key={index} className="flex justify-between text-sm">
-                            <span>{item.quantity}x {item.description}</span>
-                            <span className="font-medium">${item.totalPrice.toLocaleString()}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </div>
               </CardContent>
             </Card>
-          ))}
-        </div>
+            
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <MessageSquare className="h-4 w-4 text-green-600" />
+                  <div className="ml-2">
+                    <p className="text-sm font-medium text-gray-600">Responses</p>
+                    <p className="text-2xl font-bold">{dashboardData.total_vendors_responded}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <TrendingUp className="h-4 w-4 text-purple-600" />
+                  <div className="ml-2">
+                    <p className="text-sm font-medium text-gray-600">Response Rate</p>
+                    <p className="text-2xl font-bold">
+                      {dashboardData.total_vendors_contacted > 0 
+                        ? Math.round((dashboardData.total_vendors_responded / dashboardData.total_vendors_contacted) * 100)
+                        : 0}%
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <Trophy className="h-4 w-4 text-orange-600" />
+                  <div className="ml-2">
+                    <p className="text-sm font-medium text-gray-600">Top Vendors</p>
+                    <p className="text-2xl font-bold">{dashboardData.lowest_vendors.length}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
-        {filteredQuotations.length === 0 && (
+        {/* Top 2 Vendors with Lowest Quotations */}
+        {dashboardData && dashboardData.lowest_vendors.length > 0 && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Medal className="h-5 w-5 text-yellow-500" />
+                Top 2 Vendors with Lowest Quotations
+              </CardTitle>
+              <CardDescription>
+                Vendors ranked by their lowest quotation amount for: {dashboardData.template?.subject}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                {dashboardData.lowest_vendors.map((vendor, index) => (
+                  <Card 
+                    key={vendor.vendor_id} 
+                    className={`border-l-4 bg-gray-900 border-gray-600 ${
+                      index === 0 ? 'border-l-yellow-500' : 'border-l-gray-400'
+                    }`}
+                  >
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${
+                            index === 0 ? 'bg-yellow-500' : 'bg-gray-500'
+                          }`}>
+                            {index + 1}
+                          </div>
+                          <div>
+                            <CardTitle className="flex items-center gap-2 text-white">
+                              <User className="h-4 w-4" />
+                              {vendor.vendor_name}
+                            </CardTitle>
+                            <CardDescription className="flex items-center gap-4 text-sm mt-2">
+                              <span className="flex items-center gap-1 text-gray-300">
+                                <Building2 className="h-3 w-3" />
+                                {vendor.vendor_company}
+                              </span>
+                              <span className="flex items-center gap-1 text-gray-300">
+                                <Mail className="h-3 w-3" />
+                                {vendor.vendor_email}
+                              </span>
+                            </CardDescription>
+                          </div>
+                        </div>
+                        
+                        <div className="text-right">
+                          <div className={`text-2xl font-bold ${
+                            index === 0 ? 'text-yellow-600' : 'text-gray-600'
+                          }`}>
+                            {formatCurrency(vendor.lowest_quotation.quoted_amount, vendor.lowest_quotation.currency)}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            Lowest Quote
+                          </div>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                        {/* Vendor Contact Details */}
+                        <div className="flex items-center gap-2 text-sm">
+                          <Mail className="h-4 w-4 text-gray-400" />
+                          <span className="text-gray-200">{vendor.contact_details?.email || vendor.vendor_email}</span>
+                        </div>
+                        
+                        {vendor.contact_details?.phone && (
+                          <div className="flex items-center gap-2 text-sm">
+                            <Phone className="h-4 w-4 text-gray-400" />
+                            <span className="text-gray-200">{vendor.contact_details.phone}</span>
+                          </div>
+                        )}
+                        
+                        {vendor.contact_details?.address && (
+                          <div className="flex items-center gap-2 text-sm">
+                            <MapPin className="h-4 w-4 text-gray-400" />
+                            <span className="text-gray-200">{vendor.contact_details.address}</span>
+                          </div>
+                        )}
+                        
+                        <div className="flex items-center gap-2 text-sm">
+                          <Building2 className="h-4 w-4 text-gray-400" />
+                          <span className="text-gray-200">{vendor.contact_details?.company || vendor.vendor_company}</span>
+                        </div>
+                        
+                        <div className="flex items-center gap-2 text-sm">
+                          <User className="h-4 w-4 text-gray-400" />
+                          <span className="text-gray-200">{vendor.contact_details?.name || vendor.vendor_name}</span>
+                        </div>
+                        
+                        <div className="flex items-center gap-2 text-sm">
+                          <MessageSquare className="h-4 w-4 text-gray-400" />
+                          <span className="text-gray-200">{vendor.quotations.length} Quotation{vendor.quotations.length !== 1 ? 's' : ''} Received</span>
+                        </div>
+                      </div>
+                      
+                      {/* Vendor Information */}
+                      <div className="bg-gray-800 p-4 rounded border border-gray-600">
+                        <h5 className="font-medium text-sm text-gray-100 mb-3">Vendor Information:</h5>
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Contact Person</p>
+                              <p className="text-sm font-semibold text-white">{vendor.contact_details?.name || vendor.vendor_name}</p>
+                            </div>
+                            
+                            <div>
+                              <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Company</p>
+                              <p className="text-sm font-semibold text-white">{vendor.contact_details?.company || vendor.vendor_company}</p>
+                            </div>
+                            
+                            <div>
+                              <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Email</p>
+                              <p className="text-sm text-gray-200">{vendor.contact_details?.email || vendor.vendor_email}</p>
+                            </div>
+                            
+                            {vendor.contact_details?.phone && (
+                              <div>
+                                <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Phone</p>
+                                <p className="text-sm text-gray-200">{vendor.contact_details.phone}</p>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {vendor.contact_details?.address && (
+                            <div>
+                              <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Address</p>
+                              <p className="text-sm text-gray-200">{vendor.contact_details.address}</p>
+                            </div>
+                          )}
+                          
+                          <div className="border-t border-gray-600 pt-3 mt-3">
+                            <div className="flex justify-between items-center text-sm">
+                              <span className="text-gray-300">Quotation Amount:</span>
+                              <span className="font-bold text-lg text-green-400">
+                                {formatCurrency(vendor.lowest_quotation.quoted_amount, vendor.lowest_quotation.currency)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center text-sm mt-1">
+                              <span className="text-gray-300">Received:</span>
+                              <span className="text-white">{new Date(vendor.lowest_quotation.received_at).toLocaleDateString()}</span>
+                            </div>
+                            {vendor.lowest_quotation.notes && (
+                              <div className="mt-2">
+                                <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Notes</p>
+                                <p className="text-sm text-gray-200 italic">{vendor.lowest_quotation.notes}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className="flex justify-between items-center mt-4 pt-3 border-t border-gray-600">
+                          <Badge variant={vendor.lowest_quotation.is_reviewed ? "default" : "outline"} 
+                                 className={vendor.lowest_quotation.is_reviewed 
+                                   ? "bg-green-600 text-white" 
+                                   : "border-gray-500 text-gray-300"}>
+                            {vendor.lowest_quotation.is_reviewed ? "Reviewed" : "Needs Review"}
+                          </Badge>
+                          
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="border-gray-500 text-gray-200 hover:bg-gray-700 hover:text-white"
+                            onClick={() => router.push('/quotations')}
+                          >
+                            View Email Details
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* No Data State */}
+        {dashboardData && dashboardData.lowest_vendors.length === 0 && (
           <Card className="text-center py-12">
             <CardContent>
-              <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <MessageSquare className="h-12 w-12 mx-auto mb-4 text-gray-400" />
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                No quotations found
+                No Quotations Found
               </h3>
               <p className="text-gray-600 dark:text-gray-300 mb-4">
-                {searchTerm || statusFilter !== "all" 
-                  ? "No quotations match your current filters." 
-                  : "Start by sending emails to vendors to request quotations."}
+                {dashboardData.total_vendors_contacted > 0 
+                  ? "No vendors have provided quotations with amounts yet." 
+                  : "No emails have been sent for this template yet."}
               </p>
-              {!searchTerm && statusFilter === "all" && (
-                <Button onClick={() => router.push('/vendors')}>
-                  Send Quotation Requests
-                </Button>
-              )}
+              <Button onClick={() => router.push('/quotations')}>
+                View Quotations Page
+              </Button>
             </CardContent>
           </Card>
         )}

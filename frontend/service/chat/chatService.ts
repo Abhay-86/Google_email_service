@@ -9,6 +9,8 @@ import {
   ChatHistoryResponse,
   SubmitChatRequest,
   SubmitChatResponse,
+  ChatVendor,
+  EmailStats
 } from '../../types/types';
 
 // Generic chat API function
@@ -73,17 +75,10 @@ export async function getAllSessions(email: string): Promise<any[]> {
 
 // Vendor and template related functions
 
-export interface ChatVendor {
-  id: number;
-  name: string;
-  email: string;
-  company: string;
-  phone: string;
-}
-
 export interface ChatVendorsResponse {
   vendors: ChatVendor[];
   total: number;
+  email_stats?: EmailStats;
 }
 
 export interface EmailTemplate {
@@ -100,8 +95,23 @@ export interface UserTemplatesResponse {
 }
 
 // Get all vendors for chat/email sending
-export async function getChatVendors(): Promise<ChatVendorsResponse> {
-  const response = await axiosInstance.get("chat/vendors/");
+export async function getChatVendors(templateId?: number, userEmail?: string): Promise<ChatVendorsResponse> {
+  let url = "chat/vendors/";
+  const params = new URLSearchParams();
+  
+  if (templateId) {
+    params.append('template_id', templateId.toString());
+  }
+  
+  if (userEmail) {
+    params.append('user_email', userEmail);
+  }
+  
+  if (params.toString()) {
+    url += `?${params.toString()}`;
+  }
+  
+  const response = await axiosInstance.get(url);
   return response.data;
 }
 
@@ -116,7 +126,7 @@ export async function sendTemplateEmail(data: {
   vendor_id: number;
   template_id: number;
   user_email: string;
-}): Promise<{ success: boolean; message: string }> {
+}): Promise<{ success: boolean; message: string; vendor_id?: number; error?: string }> {
   const response = await axiosInstance.post("chat/send-email/", data);
   return response.data;
 }

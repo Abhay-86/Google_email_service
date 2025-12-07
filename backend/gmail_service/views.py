@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from drf_spectacular.utils import extend_schema
+from chat.models import SentEmail
 from gmail_service.serializers import (
     GmailConnectSerializer,
     GmailCallbackSerializer,
@@ -118,7 +119,7 @@ class GmailTokenExchangeView(APIView):
         response_data = {
             "success": True,
             "email": tokens["email"],
-            "access_token": tokens.get("access_token"),  # Include access token for frontend
+            "access_token": tokens.get("access_token"), 
         }
 
         return Response(response_data, status=status.HTTP_200_OK)
@@ -228,12 +229,26 @@ class ReadThreadView(APIView):
                 timestamp_obj = timezone.now()
 
             if not EmailMessage.objects.filter(message_id=m["message_id"]).exists():
+                # Find the template_id for this thread by looking at SentEmail records
+                template_id = None
+                try:
+                    
+                    sent_email = SentEmail.objects.filter(
+                        sender=acc,
+                        thread_id=thread_id,
+                        status='sent'
+                    ).first()
+                    if sent_email:
+                        template_id = sent_email.template.id
+                except Exception:
+                    pass
+                    
                 EmailMessage.objects.create(
                     thread=thread,
                     message_id=m["message_id"],
                     direction=m["direction"],
                     timestamp=timestamp_obj,
-                    template_id=None
+                    template_id=template_id
                 )
 
         return Response({"messages": msgs}, status=200)
@@ -292,12 +307,25 @@ class SyncSingleThreadView(APIView):
                 # If all else fails, use current time
                 timestamp_obj = timezone.now()
 
+            # Find the template_id for this thread by looking at SentEmail records
+            template_id = None
+            try:
+                sent_email = SentEmail.objects.filter(
+                    sender=acc,
+                    thread_id=thread_id,
+                    status='sent'
+                ).first()
+                if sent_email:
+                    template_id = sent_email.template.id
+            except Exception:
+                pass
+
             EmailMessage.objects.create(
                 thread=thread,
                 message_id=msg_id,
                 direction=m["direction"],
                 timestamp=timestamp_obj,
-                template_id=None,
+                template_id=template_id,
             )
 
             new_msg_count += 1

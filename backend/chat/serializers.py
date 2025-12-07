@@ -145,32 +145,36 @@ class VendorSelectionResponseSerializer(serializers.Serializer):
 
 
 class SendTemplateEmailSerializer(serializers.Serializer):
-    """Serializer for sending template emails to vendors"""
+    """Serializer for sending template emails to a single vendor"""
     template_id = serializers.IntegerField(
         help_text="ID of the email template to send"
     )
-    vendor_ids = serializers.ListField(
-        child=serializers.IntegerField(),
-        help_text="List of vendor IDs to send emails to"
+    vendor_id = serializers.IntegerField(
+        help_text="ID of the vendor to send email to"
     )
-    sender_email = serializers.EmailField(
+    user_email = serializers.EmailField(
         help_text="Email address of the sender (Gmail account)"
     )
 
 
 class EmailResultSerializer(serializers.Serializer):
     """Serializer for individual email send result"""
-    vendor = serializers.CharField()
-    email = serializers.EmailField()
+    vendor_id = serializers.IntegerField()
+    vendor_name = serializers.CharField()
+    vendor_email = serializers.EmailField()
     message_id = serializers.CharField(required=False)
     thread_id = serializers.CharField(required=False)
+    success = serializers.BooleanField()
     error = serializers.CharField(required=False)
 
 
 class SendTemplateEmailResponseSerializer(serializers.Serializer):
-    """Response for sending template emails"""
-    status = serializers.CharField()
-    sent_emails = EmailResultSerializer(many=True)
-    failed_emails = EmailResultSerializer(many=True)
-    total_sent = serializers.IntegerField()
-    total_failed = serializers.IntegerField()
+    """Response for sending template email to a single vendor"""
+    success = serializers.BooleanField()
+    message = serializers.CharField()
+    vendor_id = serializers.IntegerField(required=False)
+    vendor_name = serializers.CharField(required=False)
+    vendor_email = serializers.EmailField(required=False)
+    message_id = serializers.CharField(required=False)
+    thread_id = serializers.CharField(required=False)
+    error = serializers.CharField(required=False)

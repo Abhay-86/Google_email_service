@@ -2,11 +2,17 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from drf_spectacular.utils import extend_schema, OpenApiExample
-
+from django.utils import timezone
+from django.core.management import call_command
+from io import StringIO
+from chat.services.quotation_service import QuotationService
+from gmail_service.views import SyncSingleThreadView
+from gmail_service.serializers import SyncSingleThreadSerializer
 from gmail_service.models import GmailAccount
 from vendors.models import Vendor
 from gmail_service.services.gmail import GmailService
-from .models import ChatSession, ChatMessage, EmailTemplate
+from .models import ChatSession, ChatMessage, EmailTemplate, SentEmail, VendorQuotation
+from gmail_service.models import EmailThread, EmailMessage
 from .serializers import (
     ChatRequestSerializer,
     StartChatSerializer,
@@ -24,7 +30,7 @@ from .serializers import (
 )
 from .services.chat_service import ChatService
 from .services.email_service import generate_email_template
-
+from django.core.management import call_command
 
 class ChatView(APIView):
     """
@@ -187,7 +193,7 @@ class ChatView(APIView):
                     "error": "No conversation data found. Please have a conversation first."
                 }, status=400)
                 
-            email_data = generate_email_template(session.draft_json)
+            email_data = generate_email_template(session.draft_json, session.gmail_account.email)
             
             return Response({
                 "status": "preview", 
@@ -344,7 +350,7 @@ class EmailTemplateView(APIView):
         
         # Generate email template using AI
         try:
-            email_result = generate_email_template(session.draft_json)
+            email_result = generate_email_template(session.draft_json, session.gmail_account.email)
             
             # Save the generated template
             email_template = EmailTemplate.objects.create(
@@ -369,41 +375,111 @@ class EmailTemplateView(APIView):
 
 class VendorSelectionView(APIView):
     """
-    Get vendors for email template sending
+    Get vendors for email template sending, filtering out already sent vendors
     """
     
     @extend_schema(
-        summary="Get All Vendors",
-        description="Get list of all vendors to send RFP emails to",
+        summary="Get Available Vendors",
+        description="Get list of vendors to send RFP emails to, excluding those already sent the selected template",
         responses={200: VendorSelectionResponseSerializer}
     )
     def get(self, request):
         try:
-            vendors = Vendor.objects.all()
-            vendor_list = [{
-                "id": vendor.id,
-                "name": vendor.name,
-                "email": vendor.email,
-                "company": vendor.company,
-                "phone": vendor.phone
-            } for vendor in vendors]
+            template_id = request.GET.get('template_id')
+            user_email = request.GET.get('user_email')
             
-            return Response({
+            vendors = Vendor.objects.all()
+            
+            # If template_id is provided, filter out vendors that already received this template
+            if template_id:
+                try:
+                    email_template = EmailTemplate.objects.get(id=template_id)
+                    
+                    # Get vendors that have already been sent this template
+                    sent_vendor_ids = SentEmail.objects.filter(
+                        template=email_template,
+                        status='sent'  # Only exclude successfully sent emails
+                    ).values_list('vendor_id', flat=True)
+                    
+                    # Exclude vendors that already received the email
+                    vendors = vendors.exclude(id__in=sent_vendor_ids)
+                    
+                except EmailTemplate.DoesNotExist:
+                    pass  # If template doesn't exist, show all vendors
+            
+            vendor_list = []
+            for vendor in vendors:
+                vendor_data = {
+                    "id": vendor.id,
+                    "name": vendor.name,
+                    "email": vendor.email,
+                    "company": vendor.company,
+                    "phone": vendor.phone
+                }
+                
+                # Add sent status if template_id is provided
+                if template_id:
+                    sent_email = SentEmail.objects.filter(
+                        template_id=template_id,
+                        vendor=vendor
+                    ).first()
+                    
+                    if sent_email:
+                        vendor_data["email_status"] = {
+                            "status": sent_email.status,
+                            "sent_at": sent_email.sent_at.isoformat() if sent_email.sent_at else None,
+                            "error": sent_email.error_message
+                        }
+                    else:
+                        vendor_data["email_status"] = {"status": "not_sent"}
+                
+                vendor_list.append(vendor_data)
+            
+            # If template_id is provided, also return send statistics
+            response_data = {
                 "vendors": vendor_list,
                 "total": len(vendor_list)
-            })
+            }
+            
+            if template_id:
+                try:
+                    email_template = EmailTemplate.objects.get(id=template_id)
+                    sent_count = SentEmail.objects.filter(
+                        template=email_template,
+                        status='sent'
+                    ).count()
+                    
+                    failed_count = SentEmail.objects.filter(
+                        template=email_template,
+                        status='failed'
+                    ).count()
+                    
+                    total_vendors = Vendor.objects.count()
+                    
+                    response_data["email_stats"] = {
+                        "sent_count": sent_count,
+                        "failed_count": failed_count,
+                        "remaining_count": len(vendor_list),
+                        "total_vendors": total_vendors,
+                        "template_subject": email_template.subject
+                    }
+                except EmailTemplate.DoesNotExist:
+                    pass
+            
+            return Response(response_data)
+            
         except Exception as e:
             return Response({"error": f"Failed to get vendors: {str(e)}"}, status=500)
 
 
 class SendTemplateEmailView(APIView):
     """
-    Send email template to selected vendors
+    Send email template to a single vendor
     """
     
     @extend_schema(
         summary="Send Template Email",
-        description="Send RFP email template to selected vendors",
+        description="Send RFP email template to a single vendor",
         request=SendTemplateEmailSerializer,
         responses={200: SendTemplateEmailResponseSerializer}
     )
@@ -412,61 +488,132 @@ class SendTemplateEmailView(APIView):
         serializer.is_valid(raise_exception=True)
         
         template_id = serializer.validated_data['template_id']
-        vendor_ids = serializer.validated_data['vendor_ids']
-        sender_email = serializer.validated_data['sender_email']
+        vendor_id = serializer.validated_data['vendor_id']
+        user_email = serializer.validated_data['user_email']
         
         try:
             # Get the email template
             email_template = EmailTemplate.objects.get(id=template_id)
             
             # Get sender's Gmail account
-            gmail_account = GmailAccount.objects.get(email=sender_email)
+            gmail_account = GmailAccount.objects.get(email=user_email)
             
-            # Get selected vendors
-            vendors = Vendor.objects.filter(id__in=vendor_ids)
+            # Get the vendor
+            vendor = Vendor.objects.get(id=vendor_id)
             
-            sent_emails = []
-            failed_emails = []
+            # Check if email was already sent to this vendor with this template
+            existing_send = SentEmail.objects.filter(
+                template=email_template,
+                vendor=vendor
+            ).first()
             
-            for vendor in vendors:
-                try:
-                    # Send email using Gmail service
-                    result = GmailService.send_email(
-                        gmail_account=gmail_account,
-                        to_email=vendor.email,
-                        subject=email_template.subject,
-                        body=email_template.template_body,
-                        attachments=[]
-                    )
-                    
-                    sent_emails.append({
-                        "vendor": vendor.name,
-                        "email": vendor.email,
-                        "message_id": result.get("message_id"),
-                        "thread_id": result.get("thread_id")
-                    })
-                    
-                except Exception as e:
-                    failed_emails.append({
-                        "vendor": vendor.name,
-                        "email": vendor.email,
-                        "error": str(e)
-                    })
+            if existing_send:
+                return Response({
+                    "success": False,
+                    "message": f"Email already sent to {vendor.name}",
+                    "vendor_id": vendor.id,
+                    "vendor_name": vendor.name,
+                    "vendor_email": vendor.email,
+                    "error": f"This template was already sent to {vendor.name} on {existing_send.sent_at.strftime('%Y-%m-%d %H:%M')}"
+                }, status=400)
             
-            return Response({
-                "status": "completed",
-                "sent_emails": sent_emails,
-                "failed_emails": failed_emails,
-                "total_sent": len(sent_emails),
-                "total_failed": len(failed_emails)
-            })
+            try:
+                # Send email using Gmail service
+                result = GmailService.send_email(
+                    gmail_account=gmail_account,
+                    to_email=vendor.email,
+                    subject=email_template.subject,
+                    body=email_template.template_body,
+                    attachments=[]
+                )
+                
+                # Create or get EmailThread
+                
+                thread, created = EmailThread.objects.get_or_create(
+                    gmail_account=gmail_account,
+                    thread_id=result.get("thread_id"),
+                    defaults={'recipient_email': vendor.email}
+                )
+                
+                # Create EmailMessage record for the sent email
+                EmailMessage.objects.create(
+                    thread=thread,
+                    message_id=result.get("message_id"),
+                    direction="OUTBOUND",
+                    template_id=email_template.id,
+                    timestamp=timezone.now()
+                )
+                
+                # Record successful send
+                sent_email = SentEmail.objects.create(
+                    template=email_template,
+                    vendor=vendor,
+                    sender=gmail_account,
+                    vendor_email_at_time=vendor.email,
+                    vendor_name_at_time=vendor.name,
+                    vendor_company_at_time=vendor.company,
+                    message_id=result.get("message_id"),
+                    thread_id=result.get("thread_id"),
+                    status='sent'
+                )
+                
+                return Response({
+                    "success": True,
+                    "message": f"Email sent successfully to {vendor.name}",
+                    "vendor_id": vendor.id,
+                    "vendor_name": vendor.name,
+                    "vendor_email": vendor.email,
+                    "message_id": result.get("message_id"),
+                    "thread_id": result.get("thread_id"),
+                    "sent_at": sent_email.sent_at.isoformat()
+                })
+                
+            except Exception as e:
+                # Record failed send
+                SentEmail.objects.create(
+                    template=email_template,
+                    vendor=vendor,
+                    sender=gmail_account,
+                    vendor_email_at_time=vendor.email,
+                    vendor_name_at_time=vendor.name,
+                    vendor_company_at_time=vendor.company,
+                    status='failed',
+                    error_message=str(e)
+                )
+                
+                return Response({
+                    "success": False,
+                    "message": f"Failed to send email to {vendor.name}",
+                    "vendor_id": vendor.id,
+                    "vendor_name": vendor.name,
+                    "vendor_email": vendor.email,
+                    "error": str(e)
+                }, status=400)
             
         except EmailTemplate.DoesNotExist:
-            return Response({"error": "Email template not found"}, status=404)
+            return Response({
+                "success": False,
+                "message": "Email template not found",
+                "error": "Template does not exist"
+            }, status=404)
         except GmailAccount.DoesNotExist:
-            return Response({"error": "Gmail account not found"}, status=404)
+            return Response({
+                "success": False, 
+                "message": "Gmail account not found",
+                "error": "Please connect your Gmail account first"
+            }, status=404)
+        except Vendor.DoesNotExist:
+            return Response({
+                "success": False,
+                "message": "Vendor not found",
+                "error": "Vendor does not exist"
+            }, status=404)
         except Exception as e:
-            return Response({"error": f"Failed to send emails: {str(e)}"}, status=500)
+            return Response({
+                "success": False,
+                "message": "Failed to send email",
+                "error": str(e)
+            }, status=500)
 
 
 class UserTemplatesView(APIView):
@@ -514,3 +661,251 @@ class UserTemplatesView(APIView):
             
         except Exception as e:
             return Response({"error": f"Failed to get templates: {str(e)}"}, status=500)
+
+
+class VendorQuotationsView(APIView):
+    """
+    Get vendor quotations/replies for a specific template
+    """
+    
+    @extend_schema(
+        description="Get all vendor quotations for a template",
+        parameters=[
+            {
+                "name": "template_id",
+                "in": "query", 
+                "description": "Template ID to get quotations for",
+                "required": True,
+                "schema": {"type": "integer"}
+            },
+            {
+                "name": "user_email",
+                "in": "query",
+                "description": "User email address",
+                "required": True,
+                "schema": {"type": "string", "format": "email"}
+            }
+        ],
+        responses={200: dict}
+    )
+    def get(self, request):
+        template_id = request.query_params.get('template_id')
+        user_email = request.query_params.get('user_email')
+        
+        if not template_id or not user_email:
+            return Response({
+                "error": "template_id and user_email are required"
+            }, status=400)
+        
+        try:
+            # Verify user has access to this template
+            gmail_account = GmailAccount.objects.get(email=user_email)
+            template = EmailTemplate.objects.get(
+                id=template_id,
+                session__gmail_account=gmail_account
+            )
+            
+            # Process any new inbound messages first using the improved sync command
+            
+            call_command(
+                'sync_quotations',
+                once=True,
+                template_id=template_id,
+                user_email=user_email,
+                verbosity=0
+            )
+            
+            # Get all sent emails for this template
+            sent_emails = SentEmail.objects.filter(
+                template=template,
+                status='sent'
+            ).prefetch_related('quotations__email_message')
+            
+            quotations_data = []
+            
+            for sent_email in sent_emails:
+                vendor_data = {
+                    "vendor_id": sent_email.vendor.id,
+                    "vendor_name": sent_email.vendor_name_at_time,
+                    "vendor_email": sent_email.vendor_email_at_time,
+                    "vendor_company": sent_email.vendor_company_at_time,
+                    "email_sent_at": sent_email.sent_at.isoformat(),
+                    "thread_id": sent_email.thread_id,
+                    "quotations": []
+                }
+                
+                for quotation in sent_email.quotations.all():
+                    vendor_data["quotations"].append({
+                        "id": quotation.id,
+                        "message_id": quotation.email_message.message_id,
+                        "subject": quotation.subject,
+                        "body": quotation.body,
+                        "quoted_amount": float(quotation.quoted_amount) if quotation.quoted_amount else None,
+                        "currency": quotation.currency,
+                        "received_at": quotation.received_at.isoformat(),
+                        "is_reviewed": quotation.is_reviewed,
+                        "notes": quotation.notes
+                    })
+                
+                quotations_data.append(vendor_data)
+            
+            return Response({
+                "template": {
+                    "id": template.id,
+                    "subject": template.subject,
+                    "generated_at": template.generated_at.isoformat()
+                },
+                "vendors_with_quotations": quotations_data,
+                "total_vendors_contacted": sent_emails.count(),
+                "total_vendors_responded": len([v for v in quotations_data if v["quotations"]]),
+                "sync_status": "completed"
+            })
+            
+        except GmailAccount.DoesNotExist:
+            return Response({"error": "Gmail account not found"}, status=404)
+        except EmailTemplate.DoesNotExist:
+            return Response({"error": "Template not found"}, status=404)
+        except Exception as e:
+            return Response({"error": f"Failed to get quotations: {str(e)}"}, status=500)
+
+
+class SyncQuotationsView(APIView):
+    """
+    Manually trigger quotation sync for a specific template using existing sync infrastructure
+    """
+    
+    @extend_schema(
+        description="Manually sync vendor quotations for a template",
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "template_id": {"type": "integer"},
+                    "user_email": {"type": "string", "format": "email"}
+                },
+                "required": ["template_id", "user_email"]
+            }
+        },
+        responses={200: dict}
+    )
+    def post(self, request):
+        template_id = request.data.get('template_id')
+        user_email = request.data.get('user_email')
+        
+        if not template_id or not user_email:
+            return Response({
+                "error": "template_id and user_email are required"
+            }, status=400)
+        
+        try:
+            # Verify access
+            gmail_account = GmailAccount.objects.get(email=user_email)
+            template = EmailTemplate.objects.get(
+                id=template_id,
+                session__gmail_account=gmail_account
+            )
+            
+            # Get sent emails for this template that have thread_ids
+            sent_emails = SentEmail.objects.filter(
+                template=template,
+                status='sent',
+                thread_id__isnull=False
+            ).exclude(thread_id='')
+            
+            if not sent_emails:
+                return Response({
+                    "message": "No sent emails with thread IDs found for this template",
+                    "total_synced": 0,
+                    "errors": []
+                })
+            
+            # Use existing SyncSingleThreadView for each thread
+           
+            
+            total_synced = 0
+            errors = []
+            
+            sync_view = SyncSingleThreadView()
+            
+            for sent_email in sent_emails:
+                try:
+                    # Prepare data for existing sync endpoint
+                    sync_data = {
+                        'email': user_email,
+                        'thread_id': sent_email.thread_id
+                    }
+                    
+                    # Create a mock request for the sync view
+                    class MockRequest:
+                        def __init__(self, data):
+                            self.data = data
+                    
+                    mock_request = MockRequest(sync_data)
+                    
+                    # Validate the data using the existing serializer
+                    serializer = SyncSingleThreadSerializer(data=sync_data)
+                    if serializer.is_valid():
+                        mock_request.data = serializer.validated_data
+                        response = sync_view.post(mock_request)
+                        
+                        if hasattr(response, 'status_code') and response.status_code == 200:
+                            total_synced += 1
+                        else:
+                            errors.append(f"Thread {sent_email.thread_id}: Sync failed")
+                    else:
+                        errors.append(f"Thread {sent_email.thread_id}: Invalid data")
+                        
+                except Exception as e:
+                    errors.append(f"Thread {sent_email.thread_id}: {str(e)}")
+            
+            # After syncing, process the new inbound messages using improved sync command
+            try:
+                
+                
+                # Capture the output of the sync command
+                output_buffer = StringIO()
+                
+                # Run the improved sync command for this specific template
+                call_command(
+                    'sync_quotations', 
+                    '--once', 
+                    stdout=output_buffer,
+                    template_id=template_id,  # We need to add this parameter support
+                    user_email=user_email
+                )
+                
+                sync_output = output_buffer.getvalue()
+                
+                return Response({
+                    "message": f"Sync completed for {total_synced} email threads using improved sync logic",
+                    "total_synced": total_synced,
+                    "sync_details": sync_output,
+                    "errors": errors
+                })
+                
+            except Exception as e:
+                # Fallback to original quotation service
+                try:
+                    
+                    new_quotations = QuotationService.process_inbound_messages_for_template(template_id, gmail_account)
+                    
+                    return Response({
+                        "message": f"Sync completed for {total_synced} email threads (fallback method)",
+                        "total_synced": total_synced,
+                        "new_quotations_processed": new_quotations,
+                        "errors": errors + [f"Improved sync failed: {str(e)}"]
+                    })
+                    
+                except Exception as e2:
+                    return Response({
+                        "message": f"Sync completed for {total_synced} email threads, but quotation processing failed",
+                        "total_synced": total_synced,
+                        "errors": errors + [f"Quotation processing: {str(e2)}"]
+                    })
+            
+        except GmailAccount.DoesNotExist:
+            return Response({"error": "Gmail account not found"}, status=404)
+        except EmailTemplate.DoesNotExist:
+            return Response({"error": "Template not found"}, status=404)
+        except Exception as e:
+            return Response({"error": f"Failed to sync quotations: {str(e)}"}, status=500)

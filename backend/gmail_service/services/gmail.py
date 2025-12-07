@@ -203,7 +203,34 @@ class GmailService:
             headers = {h["name"]: h["value"] for h in payload.get("headers", [])}
             
             from_email = headers.get("From", "")
+            subject = headers.get("Subject", "")
             direction = "OUTBOUND" if gmail_account.email in from_email else "INBOUND"
+
+            # Extract email body
+            body = ""
+            def extract_body(payload):
+                """Recursively extract text body from email payload"""
+                if payload.get("mimeType") == "text/plain":
+                    data = payload.get("body", {}).get("data", "")
+                    if data:
+                        import base64
+                        return base64.urlsafe_b64decode(data).decode('utf-8', errors='ignore')
+                elif payload.get("mimeType") == "text/html":
+                    data = payload.get("body", {}).get("data", "")
+                    if data:
+                        import base64
+                        html_content = base64.urlsafe_b64decode(data).decode('utf-8', errors='ignore')
+                        # Simple HTML to text conversion (remove HTML tags)
+                        import re
+                        return re.sub('<[^<]+?>', '', html_content)
+                elif "parts" in payload:
+                    for part in payload["parts"]:
+                        text = extract_body(part)
+                        if text:
+                            return text
+                return ""
+
+            body = extract_body(payload)
 
             date_header = headers.get("Date")
 
@@ -224,6 +251,8 @@ class GmailService:
             messages.append({
                 "message_id": msg["id"],
                 "from": from_email,
+                "subject": subject,
+                "body": body,
                 "snippet": msg.get("snippet"),
                 "timestamp": timestamp.isoformat(),
                 "direction": direction,
