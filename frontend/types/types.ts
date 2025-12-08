@@ -176,6 +176,16 @@ export interface VendorCreateRequest {
   phone?: string;
   company?: string;
   address?: string;
+
+  // Verification fields
+  is_email_verified?: boolean;
+  is_phone_verified?: boolean;
+  is_business_verified?: boolean;
+
+  // Rating and performance fields
+  overall_rating?: number;  // 1.00 to 5.00
+  total_orders_completed?: number;
+  on_time_delivery_rate?: number;  // 0 to 100
 }
 
 export interface VendorUpdateRequest {
@@ -184,6 +194,16 @@ export interface VendorUpdateRequest {
   phone?: string;
   company?: string;
   address?: string;
+
+  // Verification fields
+  is_email_verified?: boolean;
+  is_phone_verified?: boolean;
+  is_business_verified?: boolean;
+
+  // Rating and performance fields
+  overall_rating?: number;  // 1.00 to 5.00
+  total_orders_completed?: number;
+  on_time_delivery_rate?: number;  // 0 to 100
 }
 
 export interface Vendor {
@@ -193,6 +213,17 @@ export interface Vendor {
   phone: string | null;
   company: string | null;
   address: string | null;
+
+  // Verification fields
+  is_email_verified: boolean;
+  is_phone_verified: boolean;
+  is_business_verified: boolean;
+
+  // Rating and performance fields
+  overall_rating: number;
+  total_orders_completed: number;
+  on_time_delivery_rate: number;
+
   created_at: string;
   updated_at: string;
 }

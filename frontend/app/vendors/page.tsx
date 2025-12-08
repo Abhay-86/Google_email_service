@@ -46,11 +46,15 @@ export default function VendorsPage() {
     // Get user email from localStorage
     const storedEmail = localStorage.getItem('gmail_email')
     if (!storedEmail) {
-      alert("Please connect your Gmail account first.")
+      toast({
+        title: "Gmail Account Required",
+        description: "Please connect your Gmail account first.",
+        variant: "destructive"
+      })
       window.location.href = '/'
       return
     }
-    
+
     setUserEmail(storedEmail)
     await Promise.all([
       loadUserTemplates(storedEmail)
@@ -62,9 +66,9 @@ export default function VendorsPage() {
     try {
       console.log('Loading user templates for:', email)
       const data = await getUserTemplates(email)
-      
+
       console.log('Templates API response:', data)
-      
+
       if (data.templates && data.templates.length > 0) {
         setTemplates(data.templates)
         // Auto-select the most recent template
@@ -92,28 +96,28 @@ export default function VendorsPage() {
       setLoading(false)
       return
     }
-    
+
     try {
       console.log('Loading vendors for template:', selectedTemplateId)
       const data = await getChatVendors(selectedTemplateId, userEmail)
-      
+
       console.log('Vendors API response:', data)
-      
+
       const vendorsData = data.vendors || []
       console.log('Setting vendors:', vendorsData.length, vendorsData)
       setVendors(vendorsData)
-      
+
       // Set email stats if available
       if (data.email_stats) {
         setEmailStats(data.email_stats)
       }
-      
+
       // Update sent vendors based on email status
       const alreadySentVendorIds = vendorsData
         .filter(vendor => vendor.email_status === 'sent')
         .map(vendor => vendor.id)
       setSentVendors(new Set(alreadySentVendorIds))
-      
+
     } catch (error) {
       console.error("Error loading vendors:", error)
       toast({
@@ -146,10 +150,10 @@ export default function VendorsPage() {
     }
 
     const vendor = vendors.find(v => v.id === vendorId)
-    
+
     try {
       setSendingVendor(vendorId)
-      
+
       const result = await sendTemplateEmail({
         vendor_id: vendorId,
         template_id: selectedTemplateId,
@@ -224,13 +228,13 @@ export default function VendorsPage() {
               </p>
             </div>
           </div>
-          
+
           <div className="text-right">
             <div className="text-sm text-gray-500">Emails sent</div>
             <div className="text-xl font-bold">{sentVendors.size} / {vendors.length}</div>
             {sentVendors.size > 0 && (
-              <Button 
-                className="mt-2" 
+              <Button
+                className="mt-2"
                 onClick={finishSending}
                 variant="default"
               >
@@ -337,9 +341,9 @@ export default function VendorsPage() {
                   <span>{Math.round(((emailStats.sent_count + emailStats.failed_count) / emailStats.total_vendors) * 100)}%</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
-                    style={{width: `${((emailStats.sent_count + emailStats.failed_count) / emailStats.total_vendors) * 100}%`}}
+                  <div
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${((emailStats.sent_count + emailStats.failed_count) / emailStats.total_vendors) * 100}%` }}
                   ></div>
                 </div>
               </div>
@@ -352,68 +356,68 @@ export default function VendorsPage() {
           {filteredVendors
             .filter(vendor => vendor.email_status !== 'sent') // Hide sent vendors
             .map((vendor) => {
-            const isSent = sentVendors.has(vendor.id)
-            const isSending = sendingVendor === vendor.id
-            
-            return (
-              <Card key={vendor.id} className={`relative ${isSent ? 'bg-green-50 border-green-200' : ''}`}>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <User className="h-4 w-4" />
-                      {vendor.name}
-                    </CardTitle>
-                    {isSent && (
-                      <Badge variant="default" className="bg-green-500">
-                        <CheckCircle className="h-3 w-3 mr-1" />
-                        Sent
-                      </Badge>
-                    )}
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-center gap-2 text-sm">
-                    <Building2 className="h-4 w-4 text-gray-400" />
-                    <span>{vendor.company}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <Mail className="h-4 w-4 text-gray-400" />
-                    <span>{vendor.email}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <Phone className="h-4 w-4 text-gray-400" />
-                    <span>{vendor.phone}</span>
-                  </div>
-                  
-                  <div className="pt-3">
-                    <Button
-                      className="w-full"
-                      onClick={() => sendEmailToVendor(vendor.id)}
-                      disabled={isSent || isSending}
-                      variant={isSent ? "outline" : "default"}
-                    >
-                      {isSending ? (
-                        <>
-                          <AlertCircle className="h-4 w-4 mr-2 animate-spin" />
-                          Sending...
-                        </>
-                      ) : isSent ? (
-                        <>
-                          <CheckCircle className="h-4 w-4 mr-2" />
-                          Email Sent
-                        </>
-                      ) : (
-                        <>
-                          <Mail className="h-4 w-4 mr-2" />
-                          Send Email
-                        </>
+              const isSent = sentVendors.has(vendor.id)
+              const isSending = sendingVendor === vendor.id
+
+              return (
+                <Card key={vendor.id} className={`relative ${isSent ? 'bg-green-50 border-green-200' : ''}`}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <User className="h-4 w-4" />
+                        {vendor.name}
+                      </CardTitle>
+                      {isSent && (
+                        <Badge variant="default" className="bg-green-500">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Sent
+                        </Badge>
                       )}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Building2 className="h-4 w-4 text-gray-400" />
+                      <span>{vendor.company}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <Mail className="h-4 w-4 text-gray-400" />
+                      <span>{vendor.email}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <Phone className="h-4 w-4 text-gray-400" />
+                      <span>{vendor.phone}</span>
+                    </div>
+
+                    <div className="pt-3">
+                      <Button
+                        className="w-full"
+                        onClick={() => sendEmailToVendor(vendor.id)}
+                        disabled={isSent || isSending}
+                        variant={isSent ? "outline" : "default"}
+                      >
+                        {isSending ? (
+                          <>
+                            <AlertCircle className="h-4 w-4 mr-2 animate-spin" />
+                            Sending...
+                          </>
+                        ) : isSent ? (
+                          <>
+                            <CheckCircle className="h-4 w-4 mr-2" />
+                            Email Sent
+                          </>
+                        ) : (
+                          <>
+                            <Mail className="h-4 w-4 mr-2" />
+                            Send Email
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
         </div>
 
         {filteredVendors.length === 0 && vendors.length > 0 && (

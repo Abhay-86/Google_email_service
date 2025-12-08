@@ -6,7 +6,8 @@ from .views import (
     SendTemplateEmailView, 
     UserTemplatesView,
     VendorQuotationsView,
-    SyncQuotationsView
+    SyncQuotationsView,
+    CalculateVendorScoresView
 )
 
 urlpatterns = [
@@ -17,4 +18,5 @@ urlpatterns = [
     path("user-templates/", UserTemplatesView.as_view(), name="user-templates"),
     path("quotations/", VendorQuotationsView.as_view(), name="vendor-quotations"),
     path("sync-quotations/", SyncQuotationsView.as_view(), name="sync-quotations"),
+    path("calculate-scores/", CalculateVendorScoresView.as_view(), name="calculate-vendor-scores"),
 ]

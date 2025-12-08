@@ -12,6 +12,20 @@ export interface VendorQuotation {
   notes: string | null;
 }
 
+export interface VendorScore {
+  final_score: number;
+  rank: number;
+  price_score: number;
+  vendor_quality_score: number;
+  breakdown: {
+    verification: number;
+    rating: number;
+    delivery: number;
+    warranty: number;
+    response: number;
+  };
+}
+
 export interface VendorWithQuotations {
   vendor_id: number;
   vendor_name: string;
@@ -20,6 +34,7 @@ export interface VendorWithQuotations {
   email_sent_at: string;
   thread_id: string;
   quotations: VendorQuotation[];
+  score?: VendorScore | null;  // Added score field
 }
 
 export interface QuotationsResponse {
@@ -41,6 +56,15 @@ export async function getVendorQuotations(templateId: number, userEmail: string)
       template_id: templateId,
       user_email: userEmail
     }
+  });
+  return response.data;
+}
+
+// Calculate vendor scores for a template
+export async function calculateVendorScores(templateId: number, userEmail: string) {
+  const response = await axiosInstance.post('chat/calculate-scores/', {
+    template_id: templateId,
+    user_email: userEmail
   });
   return response.data;
 }

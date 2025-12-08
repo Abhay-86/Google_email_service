@@ -121,3 +121,84 @@ class VendorQuotation(models.Model):
     @property
     def received_at(self):
         return self.email_message.timestamp
+
+
+class VendorScore(models.Model):
+    """
+    Store calculated scores for each vendor per RFP template.
+    Scores are based on price (50%) and vendor quality (50%).
+    """
+    sent_email = models.OneToOneField(
+        SentEmail,
+        on_delete=models.CASCADE,
+        related_name='vendor_score',
+        help_text="Links to sent email (unique combination of template + vendor)"
+    )
+    
+    # Individual component scores (0-100)
+    price_score = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        default=0,
+        help_text="Score based on price competitiveness (0-100)"
+    )
+    verification_score = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        default=0,
+        help_text="Score based on vendor verifications (0-100)"
+    )
+    rating_score = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        default=0,
+        help_text="Score based on vendor rating (0-100)"
+    )
+    delivery_score = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        default=0,
+        help_text="Score based on on-time delivery rate (0-100)"
+    )
+    warranty_score = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        default=0,
+        help_text="Score based on warranty period offered (0-100)"
+    )
+    response_score = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        default=0,
+        help_text="Score based on response time (0-100)"
+    )
+    
+    # Combined scores
+    vendor_quality_score = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        default=0,
+        help_text="Combined vendor quality score (0-100)"
+    )
+    final_score = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        default=0,
+        help_text="Final combined score: 50% price + 50% quality (0-100)"
+    )
+    
+    # Ranking within this RFP/template
+    rank = models.IntegerField(
+        null=True, 
+        blank=True,
+        help_text="Rank among all vendors for this RFP (1 = best)"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['rank', '-final_score']
+    
+    def __str__(self):
+        return f"Score for {self.sent_email.vendor_name_at_time} - Template {self.sent_email.template.id}: {self.final_score}/100"

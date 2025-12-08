@@ -7,24 +7,27 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { 
-  ArrowLeft, 
-  Plus, 
-  Search, 
-  Edit, 
-  Trash2, 
-  Building2, 
-  Mail, 
-  Phone, 
+import {
+  ArrowLeft,
+  Plus,
+  Search,
+  Edit,
+  Trash2,
+  Building2,
+  Mail,
+  Phone,
   MapPin,
-  User
+  User,
+  CheckCircle,
+  Star,
+  Award
 } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { 
-  getVendors, 
-  createVendor, 
-  updateVendor, 
-  deleteVendor 
+import {
+  getVendors,
+  createVendor,
+  updateVendor,
+  deleteVendor
 } from "@/service/vendor/vendorService"
 import { Vendor, VendorCreateRequest, VendorUpdateRequest } from "@/types/types"
 import {
@@ -49,7 +52,13 @@ export default function VendorManagePage() {
     email: "",
     phone: "",
     company: "",
-    address: ""
+    address: "",
+    is_email_verified: false,
+    is_phone_verified: false,
+    is_business_verified: false,
+    overall_rating: 3.0,
+    total_orders_completed: 0,
+    on_time_delivery_rate: 100.0
   })
 
   useEffect(() => {
@@ -89,7 +98,7 @@ export default function VendorManagePage() {
 
   const handleCreateVendor = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!formData.name || !formData.email) {
       toast({
         title: "Validation Error",
@@ -121,12 +130,12 @@ export default function VendorManagePage() {
 
   const handleUpdateVendor = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!editingVendor) return
 
     if (!formData.name || !formData.email) {
       toast({
-        title: "Validation Error", 
+        title: "Validation Error",
         description: "Name and email are required.",
         variant: "destructive"
       })
@@ -139,17 +148,25 @@ export default function VendorManagePage() {
         email: formData.email,
         phone: formData.phone || undefined,
         company: formData.company || undefined,
-        address: formData.address || undefined
+        address: formData.address || undefined,
+        // Include verification fields
+        is_email_verified: formData.is_email_verified,
+        is_phone_verified: formData.is_phone_verified,
+        is_business_verified: formData.is_business_verified,
+        // Include performance fields
+        overall_rating: formData.overall_rating,
+        total_orders_completed: formData.total_orders_completed,
+        on_time_delivery_rate: formData.on_time_delivery_rate
       }
-      
+
       await updateVendor(editingVendor.id, updateData)
-      
+
       toast({
         title: "Success",
         description: `${formData.name} has been updated successfully.`,
         variant: "success"
       })
-      
+
       // Close modal and reset form
       setEditingVendor(null)
       resetForm()
@@ -194,7 +211,13 @@ export default function VendorManagePage() {
       email: vendor.email,
       phone: vendor.phone || "",
       company: vendor.company || "",
-      address: vendor.address || ""
+      address: vendor.address || "",
+      is_email_verified: vendor.is_email_verified,
+      is_phone_verified: vendor.is_phone_verified,
+      is_business_verified: vendor.is_business_verified,
+      overall_rating: vendor.overall_rating,
+      total_orders_completed: vendor.total_orders_completed,
+      on_time_delivery_rate: vendor.on_time_delivery_rate
     })
   }
 
@@ -204,7 +227,13 @@ export default function VendorManagePage() {
       email: "",
       phone: "",
       company: "",
-      address: ""
+      address: "",
+      is_email_verified: false,
+      is_phone_verified: false,
+      is_business_verified: false,
+      overall_rating: 3.0,
+      total_orders_completed: 0,
+      on_time_delivery_rate: 100.0
     })
   }
 
@@ -231,9 +260,9 @@ export default function VendorManagePage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
-            <Button 
-              variant="ghost" 
-              size="sm" 
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => router.push('/')}
               className="text-gray-600 hover:text-gray-800"
             >
@@ -249,7 +278,7 @@ export default function VendorManagePage() {
               </p>
             </div>
           </div>
-          
+
           <Button onClick={() => setShowCreateModal(true)} className="gap-2">
             <Plus className="h-4 w-4" />
             Add Vendor
@@ -300,10 +329,41 @@ export default function VendorManagePage() {
                         </div>
                       )}
                     </div>
+
+                    {/* Verification Badges */}
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {vendor.is_email_verified && (
+                        <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Email ✓
+                        </Badge>
+                      )}
+                      {vendor.is_phone_verified && (
+                        <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Phone ✓
+                        </Badge>
+                      )}
+                      {vendor.is_business_verified && (
+                        <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                          <Award className="h-3 w-3 mr-1" />
+                          Business ✓
+                        </Badge>
+                      )}
+                    </div>
+
+                    {/* Rating and Performance */}
+                    <div className="text-xs text-gray-600 mt-2 space-y-1">
+                      <div className="flex items-center gap-1">
+                        <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                        <span>{Number(vendor.overall_rating || 3.0).toFixed(1)}/5.0 Rating</span>
+                      </div>
+                      <div>📦 {vendor.total_orders_completed || 0} orders • {Number(vendor.on_time_delivery_rate || 100).toFixed(0)}% on-time</div>
+                    </div>
                   </div>
                 </div>
               </CardHeader>
-              
+
               <CardContent>
                 {vendor.address && (
                   <div className="flex items-start gap-2 text-sm text-gray-600 mb-4">
@@ -311,22 +371,22 @@ export default function VendorManagePage() {
                     <span className="break-words">{vendor.address}</span>
                   </div>
                 )}
-                
+
                 <div className="flex items-center justify-between">
                   <Badge variant="secondary" className="text-xs">
                     Created: {new Date(vendor.created_at).toLocaleDateString()}
                   </Badge>
-                  
+
                   <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="sm"
                       onClick={() => handleEditVendor(vendor)}
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="sm"
                       onClick={() => handleDeleteVendor(vendor)}
                       className="text-red-600 hover:text-red-700 hover:border-red-300"
@@ -368,7 +428,7 @@ export default function VendorManagePage() {
                 {editingVendor ? 'Edit Vendor' : 'Create New Vendor'}
               </DialogTitle>
             </DialogHeader>
-            
+
             <form onSubmit={editingVendor ? handleUpdateVendor : handleCreateVendor} className="space-y-4">
               <div className="grid grid-cols-1 gap-4">
                 <div>
@@ -378,11 +438,11 @@ export default function VendorManagePage() {
                     type="text"
                     placeholder="Enter vendor name"
                     value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     required
                   />
                 </div>
-                
+
                 <div>
                   <Label htmlFor="email" className="required">Email *</Label>
                   <Input
@@ -390,11 +450,11 @@ export default function VendorManagePage() {
                     type="email"
                     placeholder="Enter email address"
                     value={formData.email}
-                    onChange={(e) => setFormData({...formData, email: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     required
                   />
                 </div>
-                
+
                 <div>
                   <Label htmlFor="phone">Phone</Label>
                   <Input
@@ -402,10 +462,10 @@ export default function VendorManagePage() {
                     type="tel"
                     placeholder="Enter phone number"
                     value={formData.phone}
-                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   />
                 </div>
-                
+
                 <div>
                   <Label htmlFor="company">Company</Label>
                   <Input
@@ -413,22 +473,101 @@ export default function VendorManagePage() {
                     type="text"
                     placeholder="Enter company name"
                     value={formData.company}
-                    onChange={(e) => setFormData({...formData, company: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, company: e.target.value })}
                   />
                 </div>
-                
+
                 <div>
                   <Label htmlFor="address">Address</Label>
                   <Textarea
                     id="address"
                     placeholder="Enter address"
                     value={formData.address}
-                    onChange={(e) => setFormData({...formData, address: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                     rows={3}
                   />
                 </div>
+
+                {/* Verification Section */}
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium mb-3">Verification Status</h4>
+                  <div className="space-y-2">
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.is_email_verified}
+                        onChange={(e) => setFormData({ ...formData, is_email_verified: e.target.checked })}
+                        className="rounded border-gray-300"
+                      />
+                      <span className="text-sm">Email Verified</span>
+                    </label>
+
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.is_phone_verified}
+                        onChange={(e) => setFormData({ ...formData, is_phone_verified: e.target.checked })}
+                        className="rounded border-gray-300"
+                      />
+                      <span className="text-sm">Phone Verified</span>
+                    </label>
+
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.is_business_verified}
+                        onChange={(e) => setFormData({ ...formData, is_business_verified: e.target.checked })}
+                        className="rounded border-gray-300"
+                      />
+                      <span className="text-sm">Business Verified</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Performance Section */}
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium mb-3">Performance Metrics</h4>
+                  <div className="grid grid-cols-1 gap-4">
+                    <div>
+                      <Label htmlFor="rating">Overall Rating (1.0 - 5.0)</Label>
+                      <Input
+                        id="rating"
+                        type="number"
+                        min="1.0"
+                        max="5.0"
+                        step="0.1"
+                        value={formData.overall_rating}
+                        onChange={(e) => setFormData({ ...formData, overall_rating: parseFloat(e.target.value) || 3.0 })}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="orders">Total Orders Completed</Label>
+                      <Input
+                        id="orders"
+                        type="number"
+                        min="0"
+                        value={formData.total_orders_completed}
+                        onChange={(e) => setFormData({ ...formData, total_orders_completed: parseInt(e.target.value) || 0 })}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="delivery">On-Time Delivery Rate (%)</Label>
+                      <Input
+                        id="delivery"
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={formData.on_time_delivery_rate}
+                        onChange={(e) => setFormData({ ...formData, on_time_delivery_rate: parseFloat(e.target.value) || 100.0 })}
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
-              
+
               <div className="flex justify-end gap-2 pt-4">
                 <Button type="button" variant="outline" onClick={handleCloseModals}>
                   Cancel
