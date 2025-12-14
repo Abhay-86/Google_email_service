@@ -1,0 +1,94 @@
+# Development Docker Compose
+# This file builds images from source and includes development configurations
+
+version: "3.9"
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api
+    image: frontend:dev
+    container_name: app-frontend-dev
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api
+      - NODE_ENV=production
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: google_email_backend:dev
+    container_name: app-backend-dev
+    ports:
+      - "127.0.0.1:8000:8000"
+    env_file:
+      - ./backend/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - app-network
+    volumes:
+      - ./backend/logs:/app/logs
+      - ./backend/media:/app/media
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres_gmail_service
+    environment:
+      POSTGRES_USER: abhay
+      POSTGRES_PASSWORD: abhay123
+      POSTGRES_DB: db
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"  # Expose for development access
+    restart: unless-stopped
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U abhay -d db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: google_email_service_redis
+    volumes:
+      - redis_data:/data
+    ports:
+      - "127.0.0.1:6379:6379"  # Expose for development access
+    restart: unless-stopped
+    networks:
+      - app-network
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge

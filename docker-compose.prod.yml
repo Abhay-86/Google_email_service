@@ -1,0 +1,86 @@
+# Production Docker Compose
+# This file uses pre-built images and production configurations
+
+version: "3.9"
+
+services:
+  frontend:
+    image: frontend:latest
+    container_name: app-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api
+      - NODE_ENV=production
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  backend:
+    image: google_email_backend:latest
+    container_name: app-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - app-network
+    volumes:
+      - backend_logs:/app/logs
+      - backend_media:/app/media
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres_gmail_service
+    environment:
+      POSTGRES_USER: abhay
+      POSTGRES_PASSWORD: abhay123
+      POSTGRES_DB: db
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U abhay -d db"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: google_email_service_redis
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - app-network
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  backend_logs:
+    driver: local
+  backend_media:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge

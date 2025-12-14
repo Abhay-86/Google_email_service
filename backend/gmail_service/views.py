@@ -55,8 +55,15 @@ class GmailConnectView(APIView):
         except GmailAccount.DoesNotExist:
             pass 
         
-        # Use frontend callback URL instead of backend
-        redirect_uri = settings.FRONTEND_URL + "/auth/callback"
+        # Dynamically determine frontend URL based on request origin
+        origin = request.META.get('HTTP_ORIGIN')
+        if origin and origin.startswith(('http://', 'https://')):
+            frontend_url = origin
+        else:
+            # Fallback to settings
+            frontend_url = settings.FRONTEND_URL
+            
+        redirect_uri = frontend_url + "/auth/callback"
         auth_url = GmailService.generate_auth_url(email, redirect_uri)
 
         return Response({
@@ -76,7 +83,15 @@ class GmailCallbackView(APIView):
         code = request.GET.get("code")
         email_state = request.GET.get("state")
 
-        redirect_uri = settings.FRONTEND_URL + "/auth/callback"
+        # Dynamically determine frontend URL based on request origin
+        origin = request.META.get('HTTP_ORIGIN')
+        if origin and origin.startswith(('http://', 'https://')):
+            frontend_url = origin
+        else:
+            # Fallback to settings
+            frontend_url = settings.FRONTEND_URL
+            
+        redirect_uri = frontend_url + "/auth/callback"
         tokens = GmailService.exchange_code_for_token(
             email=email_state,
             code=code,
@@ -109,7 +124,15 @@ class GmailTokenExchangeView(APIView):
         code = serializer.validated_data["code"]
         email_state = serializer.validated_data["state"]
 
-        redirect_uri = settings.FRONTEND_URL + "/auth/callback"
+        # Dynamically determine frontend URL based on request origin
+        origin = request.META.get('HTTP_ORIGIN')
+        if origin and origin.startswith(('http://', 'https://')):
+            frontend_url = origin
+        else:
+            # Fallback to settings
+            frontend_url = settings.FRONTEND_URL
+            
+        redirect_uri = frontend_url + "/auth/callback"
         tokens = GmailService.exchange_code_for_token(
             email=email_state,
             code=code,

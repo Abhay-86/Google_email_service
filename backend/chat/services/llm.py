@@ -1,7 +1,8 @@
 import json
 import requests
 from django.conf import settings
-from mistralai import Mistral
+from mistralai.client import MistralClient
+from mistralai.models.chat_completion import ChatMessage
 from decimal import Decimal
 
 MISTRAL_MODEL = "mistral-large-latest"
@@ -34,7 +35,7 @@ def mistral_parse(message, draft_json):
     """
     Send message to Mistral API and return structured response.
     """
-    client = Mistral(api_key=settings.MISTRAL_API_KEY)
+    client = MistralClient(api_key=settings.MISTRAL_API_KEY)
 
     prompt = settings.RFP_PROMPT.format(
         user_message=message,
@@ -45,8 +46,7 @@ def mistral_parse(message, draft_json):
         response = client.chat.complete(
             model=MISTRAL_MODEL,
             messages=[{"role": "user", "content": prompt}]
-        )
-
+    )   
         raw = response.choices[0].message.content
         parsed = parse_llm_response(raw)
 
@@ -196,14 +196,16 @@ def extract_quotation_info(text):
         provider = getattr(settings, "CHAT_LLM_PROVIDER", "mistral")
         
         if provider == "mistral":
-            client = Mistral(api_key=settings.MISTRAL_API_KEY)
+            client = MistralClient(api_key=settings.MISTRAL_API_KEY)
             
-            response = client.chat.complete(
+            response = client.chat(
                 model=MISTRAL_MODEL,
-                messages=[{
-                    "role": "user", 
-                    "content": quotation_prompt.format(email_text=text)
-                }]
+                messages=[
+                    ChatMessage(
+                        role="user",
+                        content=quotation_prompt.format(email_text=text)
+                    )
+                ]
             )
             
             raw = response.choices[0].message.content

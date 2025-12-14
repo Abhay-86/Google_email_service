@@ -7,7 +7,14 @@ export class ChatWebSocketService {
   
   constructor(sessionId: number) {
     this.sessionId = sessionId;
-    this.baseUrl = process.env.NEXT_PUBLIC_WS_BASE_URL || 'ws://localhost:8000';
+    // Dynamically determine WebSocket URL based on current domain
+    if (typeof window !== 'undefined') {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = window.location.host;
+      this.baseUrl = `${protocol}//${host}`;
+    } else {
+      this.baseUrl = process.env.NEXT_PUBLIC_WS_BASE_URL || 'ws://localhost';
+    }
   }
 
   connect(): Promise<void> {

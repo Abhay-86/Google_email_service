@@ -1,6 +1,8 @@
 import json
 import logging
-from mistralai import Mistral
+# from mistralai import Mistral
+from mistralai.client import MistralClient
+from mistralai.models.chat_completion import ChatMessage
 import requests
 from django.conf import settings
 
@@ -81,7 +83,7 @@ def mistral_generate_email(rfp_json, user_email):
     """
     Generate email template using Mistral API.
     """
-    client = Mistral(api_key=settings.MISTRAL_API_KEY)
+    client = MistralClient(api_key=settings.MISTRAL_API_KEY)
 
     prompt = settings.EMAIL_GENERATION_PROMPT.format(
         rfp_json=json.dumps(rfp_json, indent=2),
@@ -89,10 +91,11 @@ def mistral_generate_email(rfp_json, user_email):
     )
 
     try:
-        response = client.chat.complete(
+        response = client.chat(
             model=MISTRAL_MODEL,
-            messages=[{"role": "user", "content": prompt}]
+            messages=[ChatMessage(role="user", content=prompt)]
         )
+
 
         raw = response.choices[0].message.content
         parsed = parse_email_response(raw)
